@@ -1,0 +1,7 @@
+﻿{
+  "dependencies": {
+    "com.tencent.puerts.core": "file:<puerts-unity-mcp-repo>/third_party/puerts/unity/upms/core",
+    "com.tencent.puerts.v8": "file:<puerts-unity-mcp-repo>/third_party/puerts/unity/upms/v8",
+    "puerts-unity-mcp": "file:../puerts-unity-mcp/Packages/puerts-unity-mcp"
+  }
+}

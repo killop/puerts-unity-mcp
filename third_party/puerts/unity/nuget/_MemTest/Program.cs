@@ -1,0 +1,114 @@
+﻿using BenchmarkDotNet.Attributes;
+using BenchmarkDotNet.Diagnostics.Windows.Configs;
+using BenchmarkDotNet.Running;
+using Puerts;
+using System.Diagnostics;
+
+BenchmarkRunner.Run<ScriptEnvBenchmark>();
+
+[ShortRunJob]
+[MemoryDiagnoser]
+[NativeMemoryProfiler]
+public class ScriptEnvBenchmark
+{
+    const string code = """
+                      exec('''
+                      import System.Diagnostics.Debug as Debug
+                      import TestClass, TestClass2, TestClass3, TestClass4
+                      ''')
+                      """;
+
+    [Benchmark]
+    public void CreateAndDisposeScriptEnvLoop100()
+    {
+        for (int i = 0; i < 100; i++)
+        {
+            var env = new ScriptEnv(new BackendPython());
+            env.Eval(code);
+            env.Dispose();
+        }
+    }
+
+    [Benchmark]
+    public void CreateAndDisposeScriptEnvLoop500()
+    {
+        for (int i = 0; i < 500; i++)
+        {
+            var env = new ScriptEnv(new BackendPython());
+            env.Eval(code);
+            env.Dispose();
+        }
+    }
+}
+
+public class TestClass
+{
+    public static int staticValue = 42;
+    public int value;
+
+    public TestClass(int v)
+    {
+        value = v;
+    }
+    public void Foo()
+    {
+        Debug.WriteLine("Foo: " + value);
+    }
+    public void Bar()
+    {
+        Debug.WriteLine("Bar: " + value);
+    }
+}
+
+public class TestClass2
+{
+    public string text;
+
+    public TestClass2(string t)
+    {
+        text = t;
+    }
+
+    public void Foo2()
+    {
+
+    }
+    public void Bar2()
+    {
+
+    }
+}
+public class TestClass3
+{
+    public double number;
+
+    public TestClass3(double n)
+    {
+        number = n;
+    }
+    public void Foo2()
+    {
+
+    }
+    public void Bar2()
+    {
+
+    }
+}
+public class TestClass4
+{
+    public bool flag;
+
+    public TestClass4(bool f)
+    {
+        flag = f;
+    }
+    public void Foo2()
+    {
+
+    }
+    public void Bar2()
+    {
+
+    }
+}

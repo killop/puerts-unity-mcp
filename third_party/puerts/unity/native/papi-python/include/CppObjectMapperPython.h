@@ -1,0 +1,379 @@
+﻿/*
+ * Tencent is pleased to support the open source community by making Puerts available.
+ * Copyright (C) 2020 Tencent.  All rights reserved.
+ * Puerts is licensed under the BSD 3-Clause License, except for the third-party components listed in the file 'LICENSE' which may
+ * be subject to their corresponding license terms. This file is subject to the terms and conditions defined in file 'LICENSE',
+ * which is part of this source code package.
+ */
+
+#pragma once
+
+#include <Python.h>
+#include "pesapi.h"
+#include <EASTL/unordered_map.h>
+#include <EASTL/hash_set.h>
+#include <EASTL/allocator_malloc.h>
+#include <EASTL/shared_ptr.h>
+#include <EASTL/string.h>
+
+#include "ObjectCacheNodePython.h"
+#include "ScriptClassRegistry.h"
+
+struct pesapi_scope__;
+
+namespace pesapi
+{
+namespace pythonimpl
+{
+extern pesapi_ffi g_pesapi_ffi;
+
+typedef struct {
+    PyObject_HEAD
+    const puerts::ScriptClassDefinition* classDefinition;
+    class CppObjectMapper* mapper;
+    void* objectPtr;
+} DynObj;
+
+class CppObjectMapper
+{
+public:
+    void Initialize(PyThreadState *InThreadState);
+
+    inline eastl::weak_ptr<int> GetEnvLifeCycleTracker()
+    {
+        return ref;
+    }
+
+    void SetRegistry(puerts::ScriptClassRegistry* InRegistry)
+    {
+        registry = InRegistry;
+    }
+
+    void* getCurrentScope()
+    {
+        return currentScope;
+    }
+
+    void setCurrentScope(void* scope)
+    {
+        currentScope = scope;
+    }
+
+    void Cleanup();
+
+    eastl::unordered_map<const void*, FObjectCacheNode, eastl::hash<const void*>, eastl::equal_to<const void*>,
+        eastl::allocator_malloc>
+        CDataCache;
+    eastl::unordered_map<const void*, PyObject*, eastl::hash<const void*>, eastl::equal_to<const void*>, eastl::allocator_malloc>
+        TypeIdToFunctionMap;
+
+    // coped from STL\string.h
+    struct string_hash
+    {
+        size_t operator()(const eastl::basic_string<char,eastl::allocator_malloc>& x) const
+        {
+            const unsigned char* p = (const unsigned char*)x.c_str(); // To consider: limit p to at most 256 chars.
+            unsigned int c, result = 2166136261U; // We implement an FNV-like string hash.
+            while((c = *p++) != 0) // Using '!=' disables compiler warnings.
+                result = (result * 16777619) ^ c;
+            return (size_t)result;
+        }
+    };
+    
+    // Type alias for the inner map type
+    using MethodMap = eastl::unordered_map<eastl::basic_string<char,eastl::allocator_malloc>, puerts::ScriptFunctionInfo*,
+        string_hash, eastl::equal_to<eastl::basic_string<char,eastl::allocator_malloc>>,eastl::allocator_malloc>;
+    
+    eastl::unordered_map<const puerts::ScriptClassDefinition*, MethodMap*,
+    eastl::hash<const void*>, eastl::equal_to<const void*>,eastl::allocator_malloc>
+        MethodMetaCache;
+
+    using VariableMap = eastl::unordered_map<eastl::basic_string<char,eastl::allocator_malloc>, puerts::ScriptPropertyInfo*,
+    string_hash, eastl::equal_to<eastl::basic_string<char,eastl::allocator_malloc>>,eastl::allocator_malloc>;
+
+    eastl::unordered_map<const puerts::ScriptClassDefinition*, VariableMap*,
+    eastl::hash<const void*>, eastl::equal_to<const void*>,eastl::allocator_malloc>
+        VariableMetaCache;
+
+    inline void AddStrongRefObject(PyObject* obj)
+    {
+        StrongRefObjects.insert(obj);
+    }
+    inline void RemoveStrongRefObject(PyObject* obj)
+    {
+        StrongRefObjects.erase(obj);
+    }
+
+    inline bool SetPrivateData(PyObject* val, void* ptr) const
+    {
+        PyObject* dict = nullptr;
+        
+        if (PyDict_Check(val))
+        {
+            // Direct dictionary object
+            dict = val;
+        }
+        else if (PyFunction_Check(val) || PyMethod_Check(val) || PyCFunction_Check(val))
+        {
+            // Function objects - use their __dict__ attribute
+            dict = PyObject_GetAttrString(val, "__dict__");
+            if (!dict)
+            {
+                // If __dict__ doesn't exist, create it
+                PyErr_Clear();
+                dict = PyDict_New();
+                if (!dict) return false;
+                if (PyObject_SetAttrString(val, "__dict__", dict) < 0)
+                {
+                    Py_DECREF(dict);
+                    return false;
+                }
+            }
+        }
+        else
+        {
+            // Try to get __dict__ attribute for other objects
+            dict = PyObject_GetAttrString(val, "__dict__");
+            if (!dict)
+            {
+                PyErr_Clear();
+                return false;
+            }
+        }
+        
+        if (!PyDict_Check(dict))
+        {
+            if (dict != val) Py_DECREF(dict);
+            return false;
+        }
+        
+        PyObject* keyObj = PyUnicode_FromString(privateDataKey);
+        PyObject* capsule = nullptr;
+        
+        if (ptr == nullptr)
+        {
+            // For nullptr, store Py_None instead of creating a capsule
+            capsule = Py_None;
+            Py_INCREF(Py_None);
+        }
+        else
+        {
+            capsule = PyCapsule_New(ptr, nullptr, nullptr);
+            if (!capsule)
+            {
+                if (dict != val) Py_DECREF(dict);
+                Py_DECREF(keyObj);
+                return false;
+            }
+        }
+        
+        int result = PyDict_SetItem(dict, keyObj, capsule);
+        Py_DECREF(keyObj);
+        Py_DECREF(capsule);
+        if (dict != val) Py_DECREF(dict);
+        return result == 0;
+    }
+
+    inline bool GetPrivateData(PyObject* val, void** outPtr) const
+    {
+        PyObject* dict = nullptr;
+        
+        if (PyDict_Check(val))
+        {
+            // Direct dictionary object
+            dict = val;
+        }
+        else if (PyFunction_Check(val) || PyMethod_Check(val) || PyCFunction_Check(val))
+        {
+            // Function objects - use their __dict__ attribute
+            dict = PyObject_GetAttrString(val, "__dict__");
+            if (!dict)
+            {
+                PyErr_Clear();
+                *outPtr = nullptr;
+                return false;
+            }
+        }
+        else
+        {
+            // Try to get __dict__ attribute for other objects
+            dict = PyObject_GetAttrString(val, "__dict__");
+            if (!dict)
+            {
+                PyErr_Clear();
+                *outPtr = nullptr;
+                return false;
+            }
+        }
+        
+        if (!PyDict_Check(dict))
+        {
+            if (dict != val) Py_DECREF(dict);
+            *outPtr = nullptr;
+            return false;
+        }
+        
+        PyObject* keyObj = PyUnicode_FromString(privateDataKey);
+        if (!PyDict_Contains(dict, keyObj))
+        {
+            if (dict != val) Py_DECREF(dict);
+            Py_DECREF(keyObj);
+            *outPtr = nullptr;
+            return false;
+        }
+        
+        PyObject* value = PyDict_GetItem(dict, keyObj);  // Borrowed reference
+        Py_DECREF(keyObj);
+        
+        if (value == Py_None)
+        {
+            // Handle the case where nullptr was stored as Py_None
+            *outPtr = nullptr;
+            if (dict != val) Py_DECREF(dict);
+            return true;
+        }
+        else if (PyCapsule_CheckExact(value))
+        {
+            *outPtr = PyCapsule_GetPointer(value, nullptr);
+            if (dict != val) Py_DECREF(dict);
+            return true;
+        }
+        
+        if (dict != val) Py_DECREF(dict);
+        *outPtr = nullptr;
+        return false;
+    }
+
+    PyObject* CreateFunction(pesapi_callback Callback, void* Data, pesapi_function_finalize Finalize);
+
+    puerts::ScriptFunctionInfo* FindFuncInfo(const puerts::ScriptClassDefinition* cls,const eastl::basic_string<char,eastl::allocator_malloc>& name);
+    puerts::ScriptPropertyInfo* FindVariableInfo(
+        const puerts::ScriptClassDefinition* cls, const eastl::basic_string<char, eastl::allocator_malloc>& name);
+
+    PyObject* FindOrCreateClassByID(const void* typeId);
+
+    static PyObject* CreateError(const char* message);
+
+    PyObject* MakeFunction(puerts::ScriptFunctionInfo* FuncInfo, DynObj* Obj = nullptr);
+
+    void InitProperty(puerts::ScriptPropertyInfo* PropInfo, PyObject* Obj);
+
+    void InitVariable(puerts::ScriptPropertyInfo* PropInfo, PyObject* Obj);
+
+    PyObject* FindOrCreateClass(const puerts::ScriptClassDefinition* ClassDefinition);
+
+    void BindAndAddToCache(const puerts::ScriptClassDefinition* typeInfo, const void* ptr, PyObject* value, bool callFinalize);
+
+    void RemoveFromCache(const puerts::ScriptClassDefinition* typeInfo, const void* ptr);
+
+    PyObject* PushNativeObject(const void* TypeId, void* ObjectPtr, bool callFinalize);
+
+    PyObject* findClassByName(PyObject* this_val, int argc, PyObject** args);
+
+    inline const void* GetEnvPrivate() const
+    {
+        return envPrivate;
+    }
+
+    inline void SetEnvPrivate(const void* envPrivate_)
+    {
+        envPrivate = envPrivate_;
+    }
+
+    inline const void* GetNativeObjectPtr(PyObject* val)
+    {
+        if (val == Py_None)
+        {
+            return nullptr;
+        }
+        // Check if val is a DynObj type by verifying the object structure
+        // DynObj objects are created with basicsize = sizeof(DynObj)
+        if (!val || Py_TYPE(val)->tp_basicsize != sizeof(DynObj))
+        {
+            return nullptr;
+        }
+        // Additional safety check: verify the object has the expected context attribute
+        if (!PyObject_HasAttrString((PyObject*)Py_TYPE(val), "__context_puerts__"))
+        {
+            return nullptr;
+        }
+        auto obj = (DynObj*) val;
+        return obj->objectPtr ? obj->objectPtr : nullptr;
+    }
+
+    inline const void* GetNativeObjectTypeId(PyObject* val)
+    {
+        if (val == Py_None)
+        {
+            return nullptr;
+        }
+        // Check if val is a DynObj type by verifying the object structure
+        // DynObj objects are created with basicsize = sizeof(DynObj)
+        if (!val || Py_TYPE(val)->tp_basicsize != sizeof(DynObj))
+        {
+            return nullptr;
+        }
+        // Additional safety check: verify the object has the expected context attribute
+        if (!PyObject_HasAttrString((PyObject*)Py_TYPE(val), "__context_puerts__"))
+        {
+            return nullptr;
+        }
+        auto obj = (DynObj*) val;
+        return obj->classDefinition ? obj->classDefinition->TypeId : nullptr;
+    }
+
+    typedef struct
+    {
+        PyObject_HEAD PyObject* func_tracer_udata;
+    } __papi_func_tracer;
+
+    struct FuncInfo
+    {
+        pesapi_callback callback;
+        pesapi_function_finalize finalize;
+        void* data;
+        CppObjectMapper* mapper;
+        PyMethodDef* methodDef;
+    };
+
+    struct GetterSetterInfo
+    {
+        pesapi_callback getter;
+        pesapi_callback setter;
+        void* getterData;
+        void* setterData;
+        CppObjectMapper* mapper;
+    };
+
+    PyThreadState *threadState = nullptr;
+
+private:
+    eastl::shared_ptr<int> ref = eastl::allocate_shared<int>(eastl::allocator_malloc("shared_ptr"), 0);
+    eastl::hash_set<PyObject*, eastl::hash<const void*>, eastl::equal_to<const void*>, eastl::allocator_malloc> StrongRefObjects;
+
+    const char* object_udataKey = "__papi_udata";
+
+    const char* privateDataKey = "__papi_private_data";
+
+    const void* envPrivate = nullptr;
+
+    puerts::ScriptClassRegistry* registry = nullptr;
+
+    const char* classId = nullptr;
+    const char* funcTracerClassId = nullptr;
+
+    puerts::ScriptClassDefinition PtrClassDef = ScriptClassEmptyDefinition;
+
+    void* currentScope = nullptr;
+};
+}    // namespace pythonimpl
+}    // namespace pesapi
+
+// ----------------begin test interface----------------
+PESAPI_MODULE_EXPORT pesapi_env_ref create_py_env();
+
+PESAPI_MODULE_EXPORT void destroy_py_env(pesapi_env_ref env_ref);
+
+PESAPI_MODULE_EXPORT struct pesapi_ffi* get_papi_ffi();
+
+// ----------------end test interface----------------

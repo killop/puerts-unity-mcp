@@ -1,0 +1,55 @@
+name: build harmony unity plugin
+
+inputs:
+  backend:
+    description: 'backend'     
+    required: true
+  config:
+    type: choice
+    description: Release Or Debug
+    default: 'Release'
+    options:
+    - Release
+    - Debug
+  websocket:
+    description: enable websocket
+    default: '0'
+  build_proj_dir:
+    description: 'build project dir'     
+    required: false
+    default: 'native'
+  GITHUB_TOKEN:
+    required:
+
+runs:
+  using: "composite"
+  steps:
+    - name: Build
+      shell: bash
+      run: |
+        cd unity
+        npm i
+        cd ${{ inputs.build_proj_dir }}
+        cd ${{ inputs.backend }}
+        OHOS_NDK_HOME=~/ohos-sdk/linux/native node ../../cli make --platform ohos --config ${{ inputs.config }} --websocket ${{ inputs.websocket }}
+        cd ..
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        path: |
+          ./unity/upms/core/Plugins/**/*
+          ./unity/upms/v8/Plugins/**/*
+          ./unity/upms/nodejs/Plugins/**/*
+          ./unity/upms/lua/Plugins/**/*
+          ./unity/upms/python/Plugins/**/*
+          ./unity/upms/quickjs/Plugins/**/*
+        name: Unity_Plugins_${{ inputs.backend }}_${{ inputs.config }}_harmony
+    - name: Clean
+      shell: bash
+      run: |
+        rm -rf ./unity/upms/core/Plugins/**/*
+        rm -rf ./unity/upms/v8/Plugins/**/*
+        rm -rf ./unity/upms/nodejs/Plugins/**/*
+        rm -rf ./unity/upms/lua/Plugins/**/*
+        rm -rf ./unity/upms/python/Plugins/**/*
+        rm -rf ./unity/upms/quickjs/Plugins/**/*

@@ -1,0 +1,18 @@
+﻿{
+  "compilerOptions": {
+    "target": "esnext",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "outDir": "../upms/agent/Resources",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": false,
+    "sourceMap": false,
+    "noEmit": true,
+    "typeRoots": ["../../../Assets/Gen/Typing", "../upms/core/Typing"]
+  },
+  "include": ["src/**/*.mts", "src/**/*.d.ts", "../ai_shared_src/**/*.mts", "../../../Assets/Gen/Typing/csharp/index.d.ts"],
+  "exclude": ["node_modules"]
+}

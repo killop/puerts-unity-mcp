@@ -1,0 +1,22 @@
+{
+  "name": "PuertsUnityMcp.Editor.Tests",
+  "rootNamespace": "PuertsUnityMcp.Tests",
+  "references": [
+    "PuertsUnityMcp.Runtime",
+    "PuertsUnityMcp.Editor"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "optionalUnityReferences": [
+    "TestAssemblies"
+  ],
+  "noEngineReferences": false
+}

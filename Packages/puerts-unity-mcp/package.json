@@ -1,0 +1,22 @@
+{
+  "name": "puerts-unity-mcp",
+  "displayName": "PuerTS Unity MCP",
+  "version": "0.1.0",
+  "unity": "2021.3",
+  "description": "A reflection-first Unity MCP endpoint for Editor, Play Mode, and Player targets using PuerTS.",
+  "keywords": [
+    "unity",
+    "mcp",
+    "puerts",
+    "automation",
+    "typescript"
+  ],
+  "author": {
+    "name": "Your Company"
+  },
+  "dependencies": {
+    "com.tencent.puerts.core": "3.0.2",
+    "com.tencent.puerts.v8": "3.0.2",
+    "com.unity.ugui": "1.0.0"
+  }
+}

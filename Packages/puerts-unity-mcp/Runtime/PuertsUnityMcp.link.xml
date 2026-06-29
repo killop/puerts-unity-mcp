@@ -1,0 +1,5 @@
+<linker>
+  <assembly fullname="PuertsUnityMcp.Runtime" preserve="all" ignoreIfMissing="1" />
+  <assembly fullname="com.tencent.puerts.core" preserve="all" ignoreIfMissing="1" />
+  <assembly fullname="com.tencent.puerts.v8" preserve="all" ignoreIfMissing="1" />
+</linker>

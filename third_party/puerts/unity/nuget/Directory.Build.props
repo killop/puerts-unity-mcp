@@ -1,0 +1,82 @@
+<Project>
+  <PropertyGroup>
+    <DefineConstants>PUERTS_GENERAL;DISABLE_AUTO_REGISTER;PUERTS_REFLECT_ALL_EXTENSION;PUERTS_NUGET</DefineConstants>
+
+    <NoWarn>NU5128</NoWarn>
+
+    <PackageProjectUrl>https://github.com/Tencent/puerts</PackageProjectUrl>
+
+    <Description>Puerts is a library that makes it easy to add scripting to your .NET applications. It currently supports JavaScript (via V8/Nodejs/Quickjs) and Lua.</Description>
+    <Authors>Tencent</Authors>
+    <Copyright>Copyright (C) 2020 Tencent.</Copyright>
+
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+    <PackageIcon>Icon128.png</PackageIcon>
+
+    <PackageTags>puerts;typescript;v8;nodejs;dotnet;quickjs;lua;python</PackageTags>
+
+    <!-- Read version from package.json files -->
+    <PuertsCorePackageJson>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\upms\core\package.json'))</PuertsCorePackageJson>
+    <PuertsLuaPackageJson>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\upms\lua\package.json'))</PuertsLuaPackageJson>
+    <PuertsNodeJsPackageJson>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\upms\nodejs\package.json'))</PuertsNodeJsPackageJson>
+    <PuertsPythonPackageJson>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\upms\python\package.json'))</PuertsPythonPackageJson>
+    <PuertsQuickJsPackageJson>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\upms\quickjs\package.json'))</PuertsQuickJsPackageJson>
+    <PuertsV8PackageJson>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)..\upms\v8\package.json'))</PuertsV8PackageJson>
+
+    <PuertsCoreVersion>$([System.Text.RegularExpressions.Regex]::Match($(PuertsCorePackageJson), '\"version\"\s*:\s*\"([^\"]+)\"').Groups[1].Value)</PuertsCoreVersion>
+    <PuertsLuaVersion>$([System.Text.RegularExpressions.Regex]::Match($(PuertsLuaPackageJson), '\"version\"\s*:\s*\"([^\"]+)\"').Groups[1].Value)</PuertsLuaVersion>
+    <PuertsNodeJsVersion>$([System.Text.RegularExpressions.Regex]::Match($(PuertsNodeJsPackageJson), '\"version\"\s*:\s*\"([^\"]+)\"').Groups[1].Value)</PuertsNodeJsVersion>
+    <PuertsPythonVersion>$([System.Text.RegularExpressions.Regex]::Match($(PuertsPythonPackageJson), '\"version\"\s*:\s*\"([^\"]+)\"').Groups[1].Value)</PuertsPythonVersion>
+    <PuertsQuickJsVersion>$([System.Text.RegularExpressions.Regex]::Match($(PuertsQuickJsPackageJson), '\"version\"\s*:\s*\"([^\"]+)\"').Groups[1].Value)</PuertsQuickJsVersion>
+    <PuertsV8Version>$([System.Text.RegularExpressions.Regex]::Match($(PuertsV8PackageJson), '\"version\"\s*:\s*\"([^\"]+)\"').Groups[1].Value)</PuertsV8Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\..\LICENSE" Pack="true" PackagePath="\" Link="Properties\LICENSE"/>
+    <None Include="..\..\..\unreal\Puerts\Resources\Icon128.png" Pack="true" PackagePath="\" Link="Properties\Icon128.png" />
+  </ItemGroup>
+
+  <!-- Select README per language backend -->
+  <PropertyGroup Condition="$(MSBuildProjectName.Contains('Lua'))">
+    <PackageReadmeFile>README_Lua.md</PackageReadmeFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="$(MSBuildProjectName.Contains('Python'))">
+    <PackageReadmeFile>README_Python.md</PackageReadmeFile>
+  </PropertyGroup>
+  <PropertyGroup Condition="!$(MSBuildProjectName.Contains('Lua')) AND !$(MSBuildProjectName.Contains('Python'))">
+    <PackageReadmeFile>README_JS.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(MSBuildProjectName.Contains('Lua'))">
+    <None Include="$(MSBuildThisFileDirectory)README_Lua.md" Pack="true" PackagePath="\" Link="Properties\README_Lua.md" />
+  </ItemGroup>
+  <ItemGroup Condition="$(MSBuildProjectName.Contains('Python'))">
+    <None Include="$(MSBuildThisFileDirectory)README_Python.md" Pack="true" PackagePath="\" Link="Properties\README_Python.md" />
+  </ItemGroup>
+  <ItemGroup Condition="!$(MSBuildProjectName.Contains('Lua')) AND !$(MSBuildProjectName.Contains('Python'))">
+    <None Include="$(MSBuildThisFileDirectory)README_JS.md" Pack="true" PackagePath="\" Link="Properties\README_JS.md" />
+  </ItemGroup>
+
+
+  <!-- https://github.com/dotnet/sourcelink -->
+  <PropertyGroup Label="SourceLink">
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+  </PropertyGroup>
+
+  <!-- https://learn.microsoft.com/en-us/dotnet/core/project-sdk/msbuild-props#continuousintegrationbuild -->
+  <PropertyGroup Condition="'$(GITHUB_ACTIONS)' == 'true'">
+      <Deterministic>true</Deterministic>
+  	  <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+  </PropertyGroup> 
+
+  <PropertyGroup>
+      <PuertsCurrentTargetFrameworks>netstandard2.1;net8.0;net9.0;net10.0</PuertsCurrentTargetFrameworks>
+      <PuertsNativeAssetsLinuxTargetFrameworks>netstandard2.1;net8.0;net9.0;net10.0</PuertsNativeAssetsLinuxTargetFrameworks>
+      <PuertsNativeAssetsWin32TargetFrameworks>netstandard2.1;net8.0;net9.0;net10.0</PuertsNativeAssetsWin32TargetFrameworks>
+      <PuertsNativeAssetsmacOSTargetFrameworks>netstandard2.1;net8.0;net9.0;net10.0</PuertsNativeAssetsmacOSTargetFrameworks>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,69 @@
+name: build wasm unity plugin
+
+inputs:
+  backend:
+    description: 'backend'     
+    required: true
+  config:
+    type: choice
+    description: Release Or Debug
+    default: 'Release'
+    options:
+    - Release
+    - Debug
+  build_proj_dir:
+    description: 'build project dir'     
+    required: false
+    default: 'native'
+  GITHUB_TOKEN:
+    required:
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install libc++-dev
+      shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install clang
+        sudo apt-get install build-essential
+        sudo apt-get install libc++-dev
+        sudo apt-get install libc++abi-dev
+    - name: Build
+      shell: bash
+      run: |
+        cd unity
+        npm i
+        if [ ! -d "emsdk" ]; then
+            git clone https://github.com/emscripten-core/emsdk.git
+            cd emsdk
+            git pull
+            ./emsdk install 3.1.8
+            ./emsdk activate 3.1.8
+            cd ..
+        fi
+        source emsdk/emsdk_env.sh
+        cd ${{ inputs.build_proj_dir }}
+        cd ${{ inputs.backend }}
+        node ../../cli make --platform wasm --arch wasm32 --config ${{ inputs.config }}
+        cd ..
+    - name: Upload
+      uses: actions/upload-artifact@v4
+      with:
+        path: |
+          ./unity/upms/core/Plugins/**/*
+          ./unity/upms/v8/Plugins/**/*
+          ./unity/upms/nodejs/Plugins/**/*
+          ./unity/upms/lua/Plugins/**/*
+          ./unity/upms/python/Plugins/**/*
+          ./unity/upms/quickjs/Plugins/**/*
+        name: Unity_Plugins_${{ inputs.backend }}_${{ inputs.config }}_wasm
+    - name: Clean
+      shell: bash
+      run: |
+        rm -rf ./unity/upms/core/Plugins/**/*
+        rm -rf ./unity/upms/v8/Plugins/**/*
+        rm -rf ./unity/upms/nodejs/Plugins/**/*
+        rm -rf ./unity/upms/lua/Plugins/**/*
+        rm -rf ./unity/upms/python/Plugins/**/*
+        rm -rf ./unity/upms/quickjs/Plugins/**/*

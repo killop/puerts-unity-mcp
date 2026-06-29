@@ -1,0 +1,18 @@
+{
+    "name": "com.puerts.mcp",
+    "rootNamespace": "PuertsMcp",
+    "references": [
+        "com.tencent.puerts.core",
+        "com.tencent.puerts.v8",
+		"com.tencent.puerts.agent"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}

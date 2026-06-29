@@ -1,0 +1,20 @@
+{
+  "name": "PuertsUnityMcp.Player",
+  "rootNamespace": "PuertsUnityMcp",
+  "references": [
+    "com.tencent.puerts.core",
+    "com.tencent.puerts.v8",
+    "UnityEngine.UI"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [
+    "Editor"
+  ],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

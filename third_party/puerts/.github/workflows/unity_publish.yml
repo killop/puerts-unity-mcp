@@ -1,0 +1,476 @@
+name: unity publish
+
+on: 
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'tag name'     
+        required: true
+
+env:
+  RUNID: 613573412
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install NDK
+        shell: bash
+        run: |
+          cd ~
+          rm -rf ~/android-ndk-r27d
+          wget -O NDK -q https://dl.google.com/android/repository/android-ndk-r27d-linux.zip
+          sudo apt install unzip -y
+          unzip -q NDK
+      - name: puerts
+        uses: ./.github/workflows/composites/unity-build-plugins/android/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: puerts
+      - name: papi-v8
+        uses: ./.github/workflows/composites/unity-build-plugins/android/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-v8
+      - name: papi-quickjs
+        uses: ./.github/workflows/composites/unity-build-plugins/android/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-quickjs
+      - name: papi-lua
+        uses: ./.github/workflows/composites/unity-build-plugins/android/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-lua
+      - name: papi-nodejs
+        uses: ./.github/workflows/composites/unity-build-plugins/android/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-nodejs
+      - name: wsppaddon
+        uses: ./.github/workflows/composites/unity-build-plugins/android/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: wsppaddon
+          websocket: 1
+          
+  ohos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install NDK
+        shell: bash
+        run: |
+          cd ~
+          curl -O https://repo.huaweicloud.com/harmonyos/os/4.1-Release/ohos-sdk-windows_linux-public.tar.gz
+          tar xvfz ohos-sdk-windows_linux-public.tar.gz
+          cd ohos-sdk/linux
+          unzip -q -o -d ./ native-linux-x64-4.1.7.5-Release.zip
+      - name: puerts
+        uses: ./.github/workflows/composites/unity-build-plugins/ohos/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: puerts
+      - name: papi-v8
+        uses: ./.github/workflows/composites/unity-build-plugins/ohos/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-v8
+      - name: papi-quickjs
+        uses: ./.github/workflows/composites/unity-build-plugins/ohos/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-quickjs
+      - name: papi-lua
+        uses: ./.github/workflows/composites/unity-build-plugins/ohos/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-lua
+      - name: wsppaddon
+        uses: ./.github/workflows/composites/unity-build-plugins/ohos/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: wsppaddon
+          websocket: 1
+
+  ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v3
+      - name: puerts
+        uses: ./.github/workflows/composites/unity-build-plugins/ios/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: puerts
+      - name: papi-v8
+        uses: ./.github/workflows/composites/unity-build-plugins/ios/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-v8
+      - name: papi-quickjs
+        uses: ./.github/workflows/composites/unity-build-plugins/ios/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-quickjs
+      - name: papi-lua
+        uses: ./.github/workflows/composites/unity-build-plugins/ios/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-lua
+      - name: papi-nodejs
+        uses: ./.github/workflows/composites/unity-build-plugins/ios/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-nodejs
+      - name: wsppaddon
+        uses: ./.github/workflows/composites/unity-build-plugins/ios/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: wsppaddon
+          websocket: 1
+
+  osx:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: puerts
+        uses: ./.github/workflows/composites/unity-build-plugins/osx/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: puerts
+      - name: papi-v8
+        uses: ./.github/workflows/composites/unity-build-plugins/osx/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-v8
+      - name: papi-quickjs
+        uses: ./.github/workflows/composites/unity-build-plugins/osx/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-quickjs
+      - name: papi-lua
+        uses: ./.github/workflows/composites/unity-build-plugins/osx/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-lua
+      - name: papi-nodejs
+        uses: ./.github/workflows/composites/unity-build-plugins/osx/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-nodejs
+      - name: papi-python
+        uses: ./.github/workflows/composites/unity-build-plugins/osx/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-python
+          arch: arm64
+      - name: wsppaddon
+        uses: ./.github/workflows/composites/unity-build-plugins/osx/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: wsppaddon
+          websocket: 1
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v3
+      - name: puerts
+        uses: ./.github/workflows/composites/unity-build-plugins/windows/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: puerts
+          arch: x64
+      - name: papi-v8
+        uses: ./.github/workflows/composites/unity-build-plugins/windows/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-v8
+          arch: x64
+      - name: papi-quickjs
+        uses: ./.github/workflows/composites/unity-build-plugins/windows/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-quickjs
+          arch: x64
+      - name: papi-lua
+        uses: ./.github/workflows/composites/unity-build-plugins/windows/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-lua
+          arch: x64
+      - name: papi-nodejs
+        uses: ./.github/workflows/composites/unity-build-plugins/windows/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-nodejs
+          arch: x64
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14' 
+      - name: papi-python
+        uses: ./.github/workflows/composites/unity-build-plugins/windows/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-python
+          arch: x64
+      - name: wsppaddon
+        uses: ./.github/workflows/composites/unity-build-plugins/windows/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: wsppaddon
+          arch: x64
+          websocket: 1
+
+  linux64:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install LibC++
+        run: |
+          sudo apt-get update
+          sudo apt-get install clang
+          sudo apt-get install build-essential
+          sudo apt-get install libc++-dev
+          sudo apt-get install libc++abi-dev
+      - name: puerts
+        uses: ./.github/workflows/composites/unity-build-plugins/linux/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: puerts
+      - name: papi-v8
+        uses: ./.github/workflows/composites/unity-build-plugins/linux/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-v8
+      - name: papi-quickjs
+        uses: ./.github/workflows/composites/unity-build-plugins/linux/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-quickjs
+      - name: papi-lua
+        uses: ./.github/workflows/composites/unity-build-plugins/linux/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-lua
+      - name: papi-nodejs
+        uses: ./.github/workflows/composites/unity-build-plugins/linux/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-nodejs
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14' 
+      - name: papi-python
+        uses: ./.github/workflows/composites/unity-build-plugins/linux/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-python
+      - name: wsppaddon
+        uses: ./.github/workflows/composites/unity-build-plugins/linux/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: wsppaddon
+          websocket: 1
+
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: puerts
+        uses: ./.github/workflows/composites/unity-build-plugins/wasm/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: puerts
+      - name: papi-quickjs
+        uses: ./.github/workflows/composites/unity-build-plugins/wasm/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-quickjs
+      - name: papi-lua
+        uses: ./.github/workflows/composites/unity-build-plugins/wasm/
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          backend: papi-lua
+
+  publish:
+    runs-on: ubuntu-latest
+    needs: [windows,osx,ios,android,linux64,ohos,wasm]
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Retrieve version
+        run: |
+          echo "PESAPI_VERSION=$(cat unity/native/puerts/include/pesapi.h | grep -Po '(?<=PESAPI_VERSION\s)(\d+)')" >> $GITHUB_ENV
+#          node -e "const pjson = JSON.parse(fs.readFileSync('$GITHUB_WORKSPACE/unity/Assets/core/upm/package.json', 'utf-8')); pjson.version = '${{ github.event.inputs.tag_name }}' ; fs.writeFileSync('$GITHUB_WORKSPACE/unity/Assets/core/upm/package.json', JSON.stringify(pjson))"
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: Unity_Plugins_*
+          path: unity/upms/
+          merge-multiple: true
+
+      - name: Extract versions and create release assets
+        run: |
+          cp LICENSE unity/upms/core/
+          cp LICENSE unity/upms/v8/
+          cp LICENSE unity/upms/nodejs/
+          cp LICENSE unity/upms/lua/
+          cp LICENSE unity/upms/python/
+          cp LICENSE unity/upms/quickjs/
+          cp LICENSE unity/upms/agent/
+          cp LICENSE unity/upms/mcp/
+          cd unity/upms
+          CORE_VERSION=$(node -p "require('./core/package.json').version")
+          V8_VERSION=$(node -p "require('./v8/package.json').version")
+          QUICKJS_VERSION=$(node -p "require('./quickjs/package.json').version")
+          LUA_VERSION=$(node -p "require('./lua/package.json').version")
+          NODEJS_VERSION=$(node -p "require('./nodejs/package.json').version")
+          PYTHON_VERSION=$(node -p "require('./python/package.json').version")
+          WEBGL_VERSION=$(node -p "require('./webgl/package.json').version")
+          AGENT_VERSION=$(node -p "require('./agent/package.json').version")
+          MCP_VERSION=$(node -p "require('./mcp/package.json').version")
+          echo "CORE_VERSION=${CORE_VERSION}" >> $GITHUB_ENV
+          echo "V8_VERSION=${V8_VERSION}" >> $GITHUB_ENV
+          echo "QUICKJS_VERSION=${QUICKJS_VERSION}" >> $GITHUB_ENV
+          echo "LUA_VERSION=${LUA_VERSION}" >> $GITHUB_ENV
+          echo "NODEJS_VERSION=${NODEJS_VERSION}" >> $GITHUB_ENV
+          echo "PYTHON_VERSION=${PYTHON_VERSION}" >> $GITHUB_ENV
+          echo "WEBGL_VERSION=${WEBGL_VERSION}" >> $GITHUB_ENV
+          echo "AGENT_VERSION=${AGENT_VERSION}" >> $GITHUB_ENV
+          echo "MCP_VERSION=${MCP_VERSION}" >> $GITHUB_ENV
+          echo "SKILLS_VERSION=${CORE_VERSION}" >> $GITHUB_ENV
+          tar cvfz ../../PuerTS_Core_${CORE_VERSION}.tar.gz core
+          tar cvfz ../../PuerTS_V8_${V8_VERSION}.tar.gz v8
+          tar cvfz ../../PuerTS_Quickjs_${QUICKJS_VERSION}.tar.gz quickjs
+          tar cvfz ../../PuerTS_Lua_${LUA_VERSION}.tar.gz lua
+          tar cvfz ../../PuerTS_Nodejs_${NODEJS_VERSION}.tar.gz nodejs
+          tar cvfz ../../PuerTS_Python_${PYTHON_VERSION}.tar.gz python
+          tar cvfz ../../PuerTS_Webgl_${WEBGL_VERSION}.tar.gz webgl
+          tar cvfz ../../PuerTS_Agent_${AGENT_VERSION}.tar.gz agent
+          tar cvfz ../../PuerTS_Mcp_${MCP_VERSION}.tar.gz mcp
+          cd ../skills
+          tar cvfz ../../Unity_Skills_${CORE_VERSION}.tar.gz .
+          
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          body: |
+            [`changelog`](https://github.com/Tencent/puerts/blob/master/unity/changelog.md) [`变更`](https://github.com/Tencent/puerts/blob/master/unity/changelog-hans.md)
+          tag_name: Unity_v${{ github.event.inputs.tag_name }}
+          release_name: Unity_v${{ github.event.inputs.tag_name }},PESAPI_VERSION:${{ env.PESAPI_VERSION }}
+          draft: false
+          prerelease: false
+          
+      - name: Upload Core
+        #id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./PuerTS_Core_${{ env.CORE_VERSION }}.tar.gz
+          asset_name: PuerTS_Core_${{ env.CORE_VERSION }}.tar.gz
+          asset_content_type: application/tgz
+
+      - name: Upload V8 Backend
+        #id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./PuerTS_V8_${{ env.V8_VERSION }}.tar.gz
+          asset_name: PuerTS_V8_${{ env.V8_VERSION }}.tar.gz
+          asset_content_type: application/tgz
+
+      - name: Upload Quickjs Backend
+        #id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./PuerTS_Quickjs_${{ env.QUICKJS_VERSION }}.tar.gz
+          asset_name: PuerTS_Quickjs_${{ env.QUICKJS_VERSION }}.tar.gz
+          asset_content_type: application/tgz
+
+      - name: Upload Lua Backend
+        #id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./PuerTS_Lua_${{ env.LUA_VERSION }}.tar.gz
+          asset_name: "PuerTS_Lua_${{ env.LUA_VERSION }}.tar.gz"
+          asset_content_type: application/tgz
+
+      - name: Upload Nodejs Backend
+        #id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./PuerTS_Nodejs_${{ env.NODEJS_VERSION }}.tar.gz
+          asset_name: "PuerTS_Nodejs_${{ env.NODEJS_VERSION }}.tar.gz"
+          asset_content_type: application/tgz
+      - name: Upload Python Backend
+        #id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./PuerTS_Python_${{ env.PYTHON_VERSION }}.tar.gz
+          asset_name: "PuerTS_Python_${{ env.PYTHON_VERSION }}.tar.gz"
+          asset_content_type: application/tgz
+      - name: Upload Webgl Backend
+        #id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./PuerTS_Webgl_${{ env.WEBGL_VERSION }}.tar.gz
+          asset_name: "PuerTS_Webgl_${{ env.WEBGL_VERSION }}.tar.gz"
+          asset_content_type: application/tgz
+
+      - name: Upload Agent
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./PuerTS_Agent_${{ env.AGENT_VERSION }}.tar.gz
+          asset_name: "PuerTS_Agent_${{ env.AGENT_VERSION }}.tar.gz"
+          asset_content_type: application/tgz
+
+      - name: Upload MCP
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./PuerTS_Mcp_${{ env.MCP_VERSION }}.tar.gz
+          asset_name: "PuerTS_Mcp_${{ env.MCP_VERSION }}.tar.gz"
+          asset_content_type: application/tgz
+
+      - name: Upload Unity Skills
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./Unity_Skills_${{ env.SKILLS_VERSION }}.tar.gz
+          asset_name: "Unity_Skills_${{ env.SKILLS_VERSION }}.tar.gz"
+          asset_content_type: application/tgz
+
+      # - name: Trigger demo/upm repository update
+      #   run: |
+      #     curl -XPOST -u "${{ secrets.PAT_USERNAME}}:${{secrets.PAT_TOKEN}}" -H "Accept: application/vnd.github.v3+json" -H "Content-Type: application/json" https://api.github.com/repos/zombieyang/puerts_unity_demo/actions/workflows/sync-package.yml/dispatches -d '{"ref": "master", "inputs": {"push_tag_version": "${{ github.event.inputs.tag_name }}"}}'
