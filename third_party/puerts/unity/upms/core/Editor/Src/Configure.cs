@@ -159,13 +159,31 @@ namespace Puerts
         private static string GetDefaultCodeOutputDirectory()
         {
             var projectRoot = System.IO.Path.GetFullPath(System.IO.Path.Combine(UnityEngine.Application.dataPath, ".."));
-            var mcpPackagePath = System.IO.Path.Combine(projectRoot, "puerts-unity-mcp", "Packages", "puerts-unity-mcp");
-            if (System.IO.Directory.Exists(mcpPackagePath))
+            var localPackagePath = System.IO.Path.Combine(projectRoot, "puerts-unity-mcp", "Packages", "puerts-unity-mcp");
+            var manifestPath = System.IO.Path.Combine(projectRoot, "Packages", "manifest.json");
+            if (System.IO.Directory.Exists(localPackagePath) || ManifestReferencesPuertsUnityMcp(manifestPath))
             {
-                return System.IO.Path.Combine(mcpPackagePath, "Generated") + System.IO.Path.DirectorySeparatorChar;
+                return System.IO.Path.Combine(projectRoot, "puerts-unity-mcp-extension", "Generated") + System.IO.Path.DirectorySeparatorChar;
             }
 
             return UnityEngine.Application.dataPath + "/Gen/";
+        }
+
+        private static bool ManifestReferencesPuertsUnityMcp(string manifestPath)
+        {
+            if (!System.IO.File.Exists(manifestPath))
+            {
+                return false;
+            }
+
+            try
+            {
+                return System.IO.File.ReadAllText(manifestPath).Contains("\"puerts-unity-mcp\"");
+            }
+            catch
+            {
+                return false;
+            }
         }
 #endif
     }

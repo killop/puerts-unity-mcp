@@ -356,6 +356,7 @@ C# 侧 JSON 序列化只使用 Unity `JsonUtility`。项目不依赖 Newtonsoft.
 | `puerts-unity-mcp-extension/editor-mcp-config.json` | Editor、Agent、target 选择、LAN discovery 配置 |
 | `puerts-unity-mcp-extension/mobile-mcp-config.json` | Runtime / Player 配置，会复制进构建 |
 | `Packages/puerts-unity-mcp/Plugins/Android` | 随包提供的 Android PuerTS native libraries 和 MCP 权限库 |
+| `puerts-unity-mcp-extension/Plugins/puerts_il2cpp` | 当前 Unity 工程生成的 PuerTS IL2CPP bridge 文件；应忽略并按工程重新生成，不要当成通用 package 源码提交 |
 | `puerts-unity-mcp-extension/Editor/editor-tools` | 项目 Editor JS MCP tools |
 | `puerts-unity-mcp-extension/Runtime/runtime-tools` | 项目 Runtime JS MCP tools |
 | `puerts-unity-mcp-extension/skills` | 给 Agent 使用的项目技能 |

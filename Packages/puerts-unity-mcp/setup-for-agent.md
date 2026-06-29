@@ -66,6 +66,8 @@ Runtime MCP uses low-IO defaults for phones: `enableFileCommandPump`, `enableDis
 
 For player builds, use the package tools instead of Unity Scripting Define Symbols. `add-pum-to-build.mjs` adds the PuerTS Unity MCP package dependencies, copies `<UnityProject>/puerts-unity-mcp-extension/mobile-mcp-config.json` into `Assets/StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json`, and verifies the Android native libraries and MCP permission library bundled under `Packages/puerts-unity-mcp/Plugins/Android`. `remove-pum-from-build.mjs` removes the build dependency entries and copied `StreamingAssets` config again, but keeps the bundled Android plugin files in the package.
 
+PuerTS IL2CPP bridge files are generated per Unity project under `<UnityProject>/puerts-unity-mcp-extension/Plugins/puerts_il2cpp`. Treat that folder as generated output: ignore it in reusable package source and regenerate it for the current Unity/IL2CPP environment.
+
 The Editor MCP can still route to local Play Mode runtime targets when the Unity Editor is open.
 
 ## PuerTS JavaScript Guide For Agents

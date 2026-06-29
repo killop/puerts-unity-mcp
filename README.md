@@ -356,6 +356,7 @@ Persistent project configuration:
 | `puerts-unity-mcp-extension/editor-mcp-config.json` | Editor, agent, target selection, LAN discovery config |
 | `puerts-unity-mcp-extension/mobile-mcp-config.json` | Runtime/player config copied into builds |
 | `Packages/puerts-unity-mcp/Plugins/Android` | Bundled Android PuerTS native libraries and MCP permission library |
+| `puerts-unity-mcp-extension/Plugins/puerts_il2cpp` | Generated PuerTS IL2CPP bridge files for the current Unity project; ignore/regenerate instead of committing as reusable package source |
 | `puerts-unity-mcp-extension/Editor/editor-tools` | Project Editor JS MCP tools |
 | `puerts-unity-mcp-extension/Runtime/runtime-tools` | Project Runtime JS MCP tools |
 | `puerts-unity-mcp-extension/skills` | Project skills for agents |

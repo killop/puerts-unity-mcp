@@ -643,6 +643,9 @@ function removeLegacyProjectGeneratedPluginArtifacts(projectRoot) {
   removePathInsideProject(projectRoot, path.join("Assets", "Gen", "Plugins", "puerts_il2cpp"));
   removeEmptyDirectory(projectRoot, path.join("Assets", "Gen", "Plugins"));
   removeEmptyDirectory(projectRoot, path.join("Assets", "Gen"));
+  removePathByAbsolutePath(projectRoot, path.join(projectRoot, "puerts-unity-mcp-extension", "Plugins", "puerts_il2cpp"));
+  removeEmptyDirectoryByAbsolutePath(projectRoot, path.join(projectRoot, "puerts-unity-mcp-extension", "Plugins"));
+  removePathByAbsolutePath(projectRoot, path.join(projectRoot, "puerts-unity-mcp-extension", "Generated"));
 }
 
 function defaultMobileConfig() {

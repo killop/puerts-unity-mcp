@@ -26,26 +26,44 @@ namespace Puerts.Editor.Generator
 #elif PUERTS_CPP_OUTPUT_TO_UPM
             return Path.Combine(Path.GetFullPath("Packages/com.tencent.puerts.core/"), "Plugins/puerts_il2cpp/");
 #else
-            var mcpPackagePath = GetPuertsUnityMcpPackagePath();
-            if (!string.IsNullOrEmpty(mcpPackagePath))
+            var extensionPluginPath = GetPuertsUnityMcpExtensionPluginPath();
+            if (!string.IsNullOrEmpty(extensionPluginPath))
             {
-                return Path.Combine(mcpPackagePath, "Plugins/puerts_il2cpp/");
+                return extensionPluginPath;
             }
 
             return Path.Combine(Puerts.Configure.GetCodeOutputDirectory(), "Plugins/puerts_il2cpp/");
 #endif
         }
 
-        private static string GetPuertsUnityMcpPackagePath()
+        private static string GetPuertsUnityMcpExtensionPluginPath()
         {
             var projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
             var localPackagePath = Path.Combine(projectRoot, "puerts-unity-mcp", "Packages", "puerts-unity-mcp");
-            if (Directory.Exists(localPackagePath))
+            var manifestPath = Path.Combine(projectRoot, "Packages", "manifest.json");
+            if (Directory.Exists(localPackagePath) || ManifestReferencesPuertsUnityMcp(manifestPath))
             {
-                return localPackagePath;
+                return Path.Combine(projectRoot, "puerts-unity-mcp-extension", "Plugins", "puerts_il2cpp") + Path.DirectorySeparatorChar;
             }
 
             return null;
+        }
+
+        private static bool ManifestReferencesPuertsUnityMcp(string manifestPath)
+        {
+            if (!File.Exists(manifestPath))
+            {
+                return false;
+            }
+
+            try
+            {
+                return File.ReadAllText(manifestPath).Contains("\"puerts-unity-mcp\"");
+            }
+            catch
+            {
+                return false;
+            }
         }
     }
 }
