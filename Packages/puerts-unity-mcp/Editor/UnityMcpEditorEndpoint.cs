@@ -948,7 +948,7 @@ namespace PuertsUnityMcp.Editor
                 return;
             }
 
-            discoveryService = new UnityMcpLanDiscoveryService(BuildEditorHeartbeat, discoveryGroup);
+            discoveryService = new UnityMcpLanDiscoveryService(BuildEditorHeartbeat, discoveryGroup, false);
         }
 
         private string BuildMcpUrl()

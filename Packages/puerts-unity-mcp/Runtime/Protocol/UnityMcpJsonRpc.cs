@@ -8,6 +8,14 @@ namespace PuertsUnityMcp
     public sealed class UnityMcpJsonRpc
     {
         private const string ResponseIdPlaceholder = "__PUERTS_UNITY_MCP_RESPONSE_ID__";
+        private const string AgentInstructions =
+            "PuerTS Unity MCP controls Unity Editor, Play Mode, and real Player/phone targets. " +
+            "Use editor.js.eval for Unity Editor automation; it runs JavaScript in the Editor PuerTS VM and normally does not generate C# or trigger domain reload. " +
+            "Use runtime.js.eval for Play Mode, Android, iOS, or standalone Player automation; pass targetId/httpUrl when targeting a remote phone/player. " +
+            "Write PuerTS JavaScript with CS.UnityEngine/CS.UnityEditor first, return only JSON-serializable values, and do not return Unity objects directly. " +
+            "If a wrapped C# type or member is unavailable, use __unity_mcp.typeExists/getStatic/getStaticPath/setStatic/invokeStatic as the reflection fallback. " +
+            "For phone UI automation, observe before acting with screen.screenshot, runtime.ui.snapshot, runtime.ui.find, and runtime.ui.raycast, then click with runtime.ui.click or input.tap. " +
+            "Move stable project-specific flows into puerts-unity-mcp-extension/Editor/editor-tools or puerts-unity-mcp-extension/Runtime/runtime-tools instead of repeatedly generating one-off eval scripts.";
 
         private readonly IUnityMcpEndpoint endpoint;
 
@@ -82,7 +90,8 @@ namespace PuertsUnityMcp
                 capabilities = new UnityMcpJsonRpcCapabilities
                 {
                     tools = new UnityMcpToolsCapability { listChanged = true }
-                }
+                },
+                instructions = AgentInstructions
             };
         }
 
@@ -479,6 +488,7 @@ namespace PuertsUnityMcp
             public string protocolVersion;
             public UnityMcpServerInfo serverInfo;
             public UnityMcpJsonRpcCapabilities capabilities;
+            public string instructions;
         }
 
         [Serializable]

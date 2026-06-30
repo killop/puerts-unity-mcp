@@ -221,6 +221,7 @@ namespace PuertsUnityMcp
         public string protocolVersion;
         public UnityMcpServerInfo serverInfo;
         public UnityMcpJsonRpcCapabilities capabilities;
+        public string instructions;
         public UnityMcpToolDescriptor[] tools;
         public UnityMcpToolContent[] content;
         public string structuredContentJson;

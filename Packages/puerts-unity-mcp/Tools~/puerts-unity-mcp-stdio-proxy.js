@@ -31,6 +31,14 @@ const LOCAL_EXTENSION_TOOL_PREFIX = "agent.extension.";
 const DEFAULT_MAX_FILE_BYTES = 1024 * 1024;
 const HEARTBEAT_RETENTION_MS = 10 * 60 * 1000;
 const MAX_PLAYER_HEARTBEAT_DIRECTORIES = 64;
+const AGENT_INSTRUCTIONS =
+  "PuerTS Unity MCP controls Unity Editor, Play Mode, and real Player/phone targets. " +
+  "Use editor.js.eval for Unity Editor automation; it runs JavaScript in the Editor PuerTS VM and normally does not generate C# or trigger domain reload. " +
+  "Use runtime.js.eval for Play Mode, Android, iOS, or standalone Player automation; pass targetId/httpUrl when targeting a remote phone/player. " +
+  "Write PuerTS JavaScript with CS.UnityEngine/CS.UnityEditor first, return only JSON-serializable values, and do not return Unity objects directly. " +
+  "If a wrapped C# type or member is unavailable, use __unity_mcp.typeExists/getStatic/getStaticPath/setStatic/invokeStatic as the reflection fallback. " +
+  "For phone UI automation, observe before acting with screen.screenshot, runtime.ui.snapshot, runtime.ui.find, and runtime.ui.raycast, then click with runtime.ui.click or input.tap. " +
+  "Move stable project-specific flows into puerts-unity-mcp-extension/Editor/editor-tools or puerts-unity-mcp-extension/Runtime/runtime-tools instead of repeatedly generating one-off eval scripts.";
 
 let lastRemoteToolNames = null;
 let lastLanDiscoveryDiagnostics = null;
@@ -1051,24 +1059,28 @@ async function resolveEndpointUrl() {
     throw new Error(`No reachable Player MCP endpoint found for name_group=${selector.group}${selector.id ? ` targetId=${selector.id}` : ""}.${formatLanDiscoveryDiagnostics()}`);
   }
 
-  if (selector.kind === "editor") {
+  const explicitEditorSelection = selector.kind === "editor" && (isNonEmptyString(selector.id) || isNonEmptyString(selector.name));
+  if (selector.kind === "editor" && !explicitEditorSelection) {
+    const fromInstances = resolveFromInstances(stateRoot, unityProjectPath);
+    if (fromInstances) {
+      return fromInstances;
+    }
+
+    const fromEditorConfig = resolveFromEditorConfig(config, stateRoot);
+    if (fromEditorConfig) {
+      return fromEditorConfig;
+    }
+
+    throw new Error(`No local Unity Editor MCP endpoint found for config ${configPath}. Set selectedTargetId, selectedTargetName, selectedTargetUrl, --target-id, --target-name, or --url to connect to a remote Editor/Player.`);
+  }
+
+  if (selector.kind === "editor" && explicitEditorSelection) {
     const selectedEditor = resolveFromEndpointHeartbeats(stateRoot, "editors", selector, "editor");
     if (selectedEditor) {
       return selectedEditor;
     }
-  }
 
-  const fromInstances = resolveFromInstances(stateRoot, unityProjectPath);
-  if (fromInstances) {
-    return fromInstances;
-  }
-
-  const explicitEditorSelection = selector.kind === "editor" && (isNonEmptyString(selector.id) || isNonEmptyString(selector.name));
-  if (!explicitEditorSelection) {
-    const fallbackPlayer = await resolvePlayerEndpoint(stateRoot, selector, config);
-    if (fallbackPlayer) {
-      return fallbackPlayer;
-    }
+    throw new Error(`No reachable Editor MCP endpoint found for name_group=${selector.group}${selector.id ? ` targetId=${selector.id}` : ""}${selector.name ? ` targetName=${selector.name}` : ""}.`);
   }
 
   const fromEditorConfig = resolveFromEditorConfig(config, stateRoot);
@@ -1881,6 +1893,10 @@ function appendLocalToolsToListResponse(response, context, remoteToolNames) {
 function normalizeMcpResponse(response) {
   if (!response || Array.isArray(response) || !response.result) {
     return response;
+  }
+
+  if (response.result.serverInfo && !response.result.instructions) {
+    response.result.instructions = AGENT_INSTRUCTIONS;
   }
 
   if (Array.isArray(response.result.tools)) {

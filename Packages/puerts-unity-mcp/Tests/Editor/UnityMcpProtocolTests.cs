@@ -67,7 +67,51 @@ namespace PuertsUnityMcp.Tests
             StringAssert.Contains("\"serverInfo\":", response);
             StringAssert.Contains("\"endpointKind\":\"editor\"", response);
             StringAssert.Contains("\"listChanged\":true", response);
+            StringAssert.Contains("\"instructions\":", response);
+            StringAssert.Contains("editor.js.eval", response);
+            StringAssert.Contains("runtime.js.eval", response);
+            StringAssert.Contains("__unity_mcp", response);
+            StringAssert.Contains("screen.screenshot", response);
+            StringAssert.Contains("puerts-unity-mcp-extension", response);
             Assert.False(response.Contains("\"error\""), response);
+        }
+
+        [Test]
+        public void StdioProxyBackfillsAgentInstructionsForOlderEndpoints()
+        {
+            var packageRoot = ResolvePackageRootForTest();
+            var proxy = File.ReadAllText(Path.Combine(packageRoot, "Tools~", "puerts-unity-mcp-stdio-proxy.js"));
+
+            StringAssert.Contains("const AGENT_INSTRUCTIONS", proxy);
+            StringAssert.Contains("response.result.serverInfo && !response.result.instructions", proxy);
+            StringAssert.Contains("editor.js.eval", proxy);
+            StringAssert.Contains("runtime.js.eval", proxy);
+            StringAssert.Contains("__unity_mcp", proxy);
+            StringAssert.Contains("screen.screenshot", proxy);
+        }
+
+        [Test]
+        public void StdioProxyDefaultsToLocalEditorUnlessRemoteTargetIsExplicit()
+        {
+            var packageRoot = ResolvePackageRootForTest();
+            var proxy = File.ReadAllText(Path.Combine(packageRoot, "Tools~", "puerts-unity-mcp-stdio-proxy.js"));
+
+            StringAssert.Contains("const explicitEditorSelection = selector.kind === \"editor\"", proxy);
+            StringAssert.Contains("if (selector.kind === \"editor\" && !explicitEditorSelection)", proxy);
+            StringAssert.Contains("resolveFromInstances(stateRoot, unityProjectPath)", proxy);
+            StringAssert.Contains("Set selectedTargetId, selectedTargetName, selectedTargetUrl", proxy);
+            StringAssert.Contains("if (selector.kind === \"editor\" && explicitEditorSelection)", proxy);
+            Assert.False(proxy.Contains("const fallbackPlayer = await resolvePlayerEndpoint(stateRoot, selector, config);"));
+        }
+
+        [Test]
+        public void EditorDiscoveryDoesNotPersistLanEditorHeartbeats()
+        {
+            var packageRoot = ResolvePackageRootForTest();
+            var editorEndpoint = File.ReadAllText(Path.Combine(packageRoot, "Editor", "UnityMcpEditorEndpoint.cs"));
+
+            StringAssert.Contains("new UnityMcpLanDiscoveryService(BuildEditorHeartbeat, discoveryGroup, false)", editorEndpoint);
+            Assert.False(editorEndpoint.Contains("new UnityMcpLanDiscoveryService(BuildEditorHeartbeat, discoveryGroup);"));
         }
 
         [Test]
