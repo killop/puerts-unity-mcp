@@ -2,21 +2,23 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import https from "node:https";
-import crypto from "node:crypto";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 export const packageKeys = ["com.tencent.puerts.core", "com.tencent.puerts.v8", "puerts-unity-mcp"];
+const localPackageSyncIgnoredNames = new Set([
+  ".git",
+  ".tmp",
+  ".mcp_data",
+  ".codex",
+  ".puerts-unity-mcp"
+]);
 const androidNativeLibraries = [
   { packageName: "core", fileName: "libPuertsCore.so" },
   { packageName: "core", fileName: "libWSPPAddon.so" },
   { packageName: "v8", fileName: "libPapiV8.so" }
 ];
-const androidAbiCpuNames = new Map([
-  ["arm64-v8a", "ARM64"],
-  ["armeabi-v7a", "ARMv7"],
-  ["x86_64", "X86_64"]
-]);
+const androidAbis = ["arm64-v8a", "armeabi-v7a", "x86_64"];
 
 export function getToolRoots(importMetaUrl) {
   const toolsRoot = path.dirname(fileURLToPath(importMetaUrl));
@@ -130,7 +132,7 @@ export function addPumToBuild(projectRoot, options = {}) {
   copyMobileConfig(projectRoot);
   removeLegacyProjectAndroidPluginArtifacts(projectRoot);
   removeLegacyProjectGeneratedPluginArtifacts(projectRoot);
-  copyAndroidNativeLibraries(projectRoot, options);
+  verifyPuerTsAndroidNativeLibraries(projectRoot, options);
   if (!options.skipAndroidPermissions) {
     writeAndroidPermissions(projectRoot, options);
   }
@@ -167,13 +169,17 @@ export function syncLocalPackage(options) {
     throw new Error(`Unity project root is invalid: ${unityRoot}`);
   }
 
+  if (direction !== "push" && direction !== "pull") {
+    throw new Error(`Invalid sync direction: ${direction}. Expected "push" or "pull".`);
+  }
+
   assertPathInside(unityRoot, localPackageRoot);
   if (path.basename(localPackageRoot) !== localPackageDirectoryName) {
     throw new Error(`Unexpected local package directory: ${localPackageRoot}`);
   }
 
   if (direction === "push") {
-    copyDirectoryMirror(repoRoot, localPackageRoot, new Set([".tmp", ".mcp_data", ".codex"]));
+    copyDirectoryMirror(repoRoot, localPackageRoot, localPackageSyncIgnoredNames);
     if (!options.skipManifestUpdate) {
       addPumToBuild(unityRoot, { localPackageDirectoryName });
       if (options.enablePackageTests) {
@@ -185,7 +191,7 @@ export function syncLocalPackage(options) {
     return;
   }
 
-  copyDirectoryOverlay(localPackageRoot, repoRoot);
+  copyDirectoryOverlay(localPackageRoot, repoRoot, localPackageSyncIgnoredNames);
   console.log(`Pulled package from ${localPackageRoot}`);
   console.log("Pull overlays files only; it does not delete files that were removed from the Unity-local package.");
 }
@@ -421,19 +427,11 @@ function copyMobileConfig(projectRoot) {
   console.log(`Copied ${source} to ${destination}`);
 }
 
-function copyAndroidNativeLibraries(projectRoot, options) {
+function verifyPuerTsAndroidNativeLibraries(projectRoot, options) {
   const repoRoot = resolvePumRepoRoot(projectRoot, options);
-  const packageRoot = resolvePumPackageRoot(projectRoot, options);
-  const copied = [];
-  const bundled = [];
-  for (const [abi, cpuName] of androidAbiCpuNames.entries()) {
+  const missing = [];
+  for (const abi of androidAbis) {
     for (const library of androidNativeLibraries) {
-      const destination = path.join(packageRoot, "Plugins", "Android", "libs", abi, library.fileName);
-      if (fs.existsSync(destination) && fs.existsSync(`${destination}.meta`)) {
-        bundled.push(path.relative(projectRoot, destination).replace(/\\/g, "/"));
-        continue;
-      }
-
       const source = path.join(
         repoRoot,
         "third_party",
@@ -448,45 +446,16 @@ function copyAndroidNativeLibraries(projectRoot, options) {
         library.fileName
       );
       if (!fs.existsSync(source)) {
-        continue;
+        missing.push(path.relative(repoRoot, source).replace(/\\/g, "/"));
       }
-
-      ensureDirectory(path.dirname(destination));
-      fs.copyFileSync(source, destination);
-      fs.writeFileSync(`${destination}.meta`, buildAndroidNativePluginMeta(projectRoot, destination, cpuName), "utf8");
-      copied.push(path.relative(projectRoot, destination).replace(/\\/g, "/"));
     }
   }
 
-  const requiredArm64 = ["libPuertsCore.so", "libPapiV8.so"];
-  for (const fileName of requiredArm64) {
-    const target = path.join(packageRoot, "Plugins", "Android", "libs", "arm64-v8a", fileName);
-    if (!fs.existsSync(target)) {
-      throw new Error(`Required Android PuerTS native library was not copied: ${target}`);
-    }
+  if (missing.length > 0) {
+    throw new Error(`Missing PuerTS Android native libraries under third_party/puerts: ${missing.join(", ")}`);
   }
 
-  var message = `Copied Android PuerTS native libraries: ${copied.length > 0 ? copied.join(", ") : "none"}`;
-  if (bundled.length > 0) {
-    message += `. Already bundled: ${bundled.join(", ")}`;
-  }
-
-  console.log(message);
-}
-
-function removeAndroidNativeLibraries(projectRoot, options = {}) {
-  const packageRoot = resolvePumPackageRoot(projectRoot, options);
-  for (const abi of androidAbiCpuNames.keys()) {
-    for (const library of androidNativeLibraries) {
-      removePathByAbsolutePath(projectRoot, path.join(packageRoot, "Plugins", "Android", "libs", abi, library.fileName));
-    }
-
-    removeEmptyDirectoryByAbsolutePath(projectRoot, path.join(packageRoot, "Plugins", "Android", "libs", abi));
-  }
-
-  removeEmptyDirectoryByAbsolutePath(projectRoot, path.join(packageRoot, "Plugins", "Android", "libs"));
-  removeEmptyDirectoryByAbsolutePath(projectRoot, path.join(packageRoot, "Plugins", "Android"));
-  removeEmptyDirectoryByAbsolutePath(projectRoot, path.join(packageRoot, "Plugins"));
+  console.log("Verified PuerTS Android native libraries under third_party/puerts.");
 }
 
 function resolvePumRepoRoot(projectRoot, options = {}) {
@@ -501,69 +470,12 @@ function resolvePumPackageRoot(projectRoot, options = {}) {
   return path.join(resolvePumRepoRoot(projectRoot, options), "Packages", "puerts-unity-mcp");
 }
 
-function buildAndroidNativePluginMeta(projectRoot, assetPath, cpuName) {
-  const relativeAssetPath = path.relative(projectRoot, assetPath).replace(/\\/g, "/");
-  const guid = stableGuid(`puerts-unity-mcp:${relativeAssetPath}`);
-  return [
-    "fileFormatVersion: 2",
-    `guid: ${guid}`,
-    "PluginImporter:",
-    "  externalObjects: {}",
-    "  serializedVersion: 2",
-    "  iconMap: {}",
-    "  executionOrder: {}",
-    "  defineConstraints: []",
-    "  isPreloaded: 0",
-    "  isOverridable: 1",
-    "  isExplicitlyReferenced: 0",
-    "  validateReferences: 1",
-    "  platformData:",
-    "  - first:",
-    "      : Any",
-    "    second:",
-    "      enabled: 0",
-    "      settings:",
-    "        Exclude Android: 0",
-    "        Exclude Editor: 1",
-    "        Exclude Linux64: 1",
-    "        Exclude OSXUniversal: 1",
-    "        Exclude WebGL: 1",
-    "        Exclude Win: 1",
-    "        Exclude Win64: 1",
-    "  - first:",
-    "      Android: Android",
-    "    second:",
-    "      enabled: 1",
-    "      settings:",
-    "        AndroidSharedLibraryType: Executable",
-    `        CPU: ${cpuName}`,
-    "  - first:",
-    "      Any:",
-    "    second:",
-    "      enabled: 0",
-    "      settings: {}",
-    "  - first:",
-    "      Editor: Editor",
-    "    second:",
-    "      enabled: 0",
-    "      settings:",
-    "        CPU: AnyCPU",
-    "        DefaultValueInitialized: true",
-    "        OS: AnyOS",
-    "  userData:",
-    "  assetBundleName:",
-    "  assetBundleVariant:",
-    ""
-  ].join("\n");
-}
-
-function stableGuid(value) {
-  return crypto.createHash("md5").update(value).digest("hex");
+function resolvePumAndroidPluginRoot(projectRoot, options = {}) {
+  return path.join(resolvePumPackageRoot(projectRoot, options), "Runtime", "Plugins", "Android");
 }
 
 function writeAndroidPermissions(projectRoot, options) {
-  const packageRoot = resolvePumPackageRoot(projectRoot, options);
-  const androidRoot = path.join(packageRoot, "Plugins", "Android", "puerts-unity-mcp.androidlib");
+  const androidRoot = path.join(resolvePumAndroidPluginRoot(projectRoot, options), "puerts-unity-mcp.androidlib");
   const manifestPath = path.join(androidRoot, "AndroidManifest.xml");
   const projectPropertiesPath = path.join(androidRoot, "project.properties");
   if (fs.existsSync(manifestPath) && fs.existsSync(projectPropertiesPath) && fs.existsSync(`${androidRoot}.meta`)) {
@@ -622,12 +534,11 @@ function writeAndroidPermissions(projectRoot, options) {
 }
 
 function removeAndroidPermissions(projectRoot, options = {}) {
-  const packageRoot = resolvePumPackageRoot(projectRoot, options);
-  removePathByAbsolutePath(projectRoot, path.join(packageRoot, "Plugins", "Android", "puerts-unity-mcp.androidlib"));
+  removePathByAbsolutePath(projectRoot, path.join(resolvePumAndroidPluginRoot(projectRoot, options), "puerts-unity-mcp.androidlib"));
 }
 
 function removeLegacyProjectAndroidPluginArtifacts(projectRoot) {
-  for (const abi of androidAbiCpuNames.keys()) {
+  for (const abi of androidAbis) {
     for (const library of androidNativeLibraries) {
       removePathInsideProject(projectRoot, path.join("Assets", "Plugins", "Android", "libs", abi, library.fileName));
     }
@@ -643,9 +554,6 @@ function removeLegacyProjectGeneratedPluginArtifacts(projectRoot) {
   removePathInsideProject(projectRoot, path.join("Assets", "Gen", "Plugins", "puerts_il2cpp"));
   removeEmptyDirectory(projectRoot, path.join("Assets", "Gen", "Plugins"));
   removeEmptyDirectory(projectRoot, path.join("Assets", "Gen"));
-  removePathByAbsolutePath(projectRoot, path.join(projectRoot, "puerts-unity-mcp-extension", "Plugins", "puerts_il2cpp"));
-  removeEmptyDirectoryByAbsolutePath(projectRoot, path.join(projectRoot, "puerts-unity-mcp-extension", "Plugins"));
-  removePathByAbsolutePath(projectRoot, path.join(projectRoot, "puerts-unity-mcp-extension", "Generated"));
 }
 
 function defaultMobileConfig() {
@@ -862,7 +770,7 @@ function removeDirectorySafe(target) {
     throw new Error(`Refusing to remove unsafe path: ${resolved}`);
   }
 
-  fs.rmSync(resolved, { recursive: true, force: true });
+  fs.rmSync(resolved, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }
 
 function assertPathInside(root, target) {
@@ -890,23 +798,31 @@ function copyDirectoryMirror(source, target, ignoredNames = new Set()) {
   }
 }
 
-function copyDirectoryOverlay(source, target) {
+function copyDirectoryOverlay(source, target, ignoredNames = new Set()) {
   if (!fs.existsSync(source)) {
     throw new Error(`Source directory not found: ${source}`);
   }
 
   ensureDirectory(target);
   for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
-    copyRecursive(path.join(source, entry.name), path.join(target, entry.name));
+    if (ignoredNames.has(entry.name)) {
+      continue;
+    }
+
+    copyRecursive(path.join(source, entry.name), path.join(target, entry.name), ignoredNames);
   }
 }
 
-function copyRecursive(source, target) {
+function copyRecursive(source, target, ignoredNames = new Set()) {
   const stats = fs.statSync(source);
   if (stats.isDirectory()) {
     ensureDirectory(target);
     for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
-      copyRecursive(path.join(source, entry.name), path.join(target, entry.name));
+      if (ignoredNames.has(entry.name)) {
+        continue;
+      }
+
+      copyRecursive(path.join(source, entry.name), path.join(target, entry.name), ignoredNames);
     }
     return;
   }

@@ -50,16 +50,11 @@ namespace PuertsUnityMcp
         public UnityMcpToolRegistry Tools => tools;
         public PuertsScriptHost ScriptHost => scriptHost;
 
-#if UNITY_EDITOR
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void AutoCreateInEditorPlayMode()
+        private static void AutoCreateRuntime()
         {
-            if (!Application.isEditor)
-            {
-                return;
-            }
-
-            Debug.Log("[UnityMCP] Editor Play Mode runtime bootstrap invoked. productName=" + Application.productName
+            Debug.Log("[UnityMCP] Runtime bootstrap invoked. isEditor=" + Application.isEditor
+                + ", productName=" + Application.productName
                 + ", streamingAssetsPath=" + Application.streamingAssetsPath);
             try
             {
@@ -67,10 +62,9 @@ namespace PuertsUnityMcp
             }
             catch (Exception ex)
             {
-                Debug.LogError("[UnityMCP] Editor Play Mode runtime bootstrap failed: " + ex);
+                Debug.LogError("[UnityMCP] Runtime bootstrap failed: " + ex);
             }
         }
-#endif
 
         public static bool EnsureAutoStarted()
         {

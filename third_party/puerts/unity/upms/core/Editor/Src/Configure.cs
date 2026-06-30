@@ -163,7 +163,7 @@ namespace Puerts
             var manifestPath = System.IO.Path.Combine(projectRoot, "Packages", "manifest.json");
             if (System.IO.Directory.Exists(localPackagePath) || ManifestReferencesPuertsUnityMcp(manifestPath))
             {
-                return System.IO.Path.Combine(projectRoot, "puerts-unity-mcp-extension", "Generated") + System.IO.Path.DirectorySeparatorChar;
+                return System.IO.Path.Combine(projectRoot, "puerts-unity-mcp-extension", "Runtime", "Generated") + System.IO.Path.DirectorySeparatorChar;
             }
 
             return UnityEngine.Application.dataPath + "/Gen/";

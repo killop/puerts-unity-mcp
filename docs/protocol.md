@@ -29,8 +29,7 @@ the Unity Editor.
 Implementation assemblies:
 
 - `PuertsUnityMcp.Editor`: Editor-only UI, build hook, and Editor MCP.
-- `PuertsUnityMcp.Runtime`: Runtime MCP implementation used by Editor Play Mode.
-- `PuertsUnityMcp.Player`: non-Editor Player MCP implementation used by Android, iOS, and standalone builds.
+- `PuertsUnityMcp.Runtime`: Runtime MCP implementation shared by Editor Play Mode, Android, iOS, and standalone builds.
 
 There are two endpoint kinds:
 

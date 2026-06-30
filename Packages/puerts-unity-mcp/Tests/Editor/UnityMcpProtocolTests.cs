@@ -230,15 +230,22 @@ namespace PuertsUnityMcp.Tests
         }
 
         [Test]
-        public void AndroidPluginAssetsAreBundledAndRemoveBuildKeepsThem()
+        public void AndroidPluginAssetsUseUpstreamPuertsLibrariesAndBundledPermissionLibrary()
         {
             var packageRoot = ResolvePackageRootForTest();
-            Assert.True(File.Exists(Path.Combine(packageRoot, "Plugins", "Android", "libs", "arm64-v8a", "libPapiV8.so")));
-            Assert.True(File.Exists(Path.Combine(packageRoot, "Plugins", "Android", "libs", "arm64-v8a", "libPuertsCore.so")));
-            Assert.True(File.Exists(Path.Combine(packageRoot, "Plugins", "Android", "libs", "arm64-v8a", "libWSPPAddon.so")));
-            Assert.True(File.Exists(Path.Combine(packageRoot, "Plugins", "Android", "puerts-unity-mcp.androidlib", "AndroidManifest.xml")));
+            var androidRoot = Path.Combine(packageRoot, "Runtime", "Plugins", "Android");
+            Assert.False(Directory.Exists(Path.Combine(androidRoot, "libs")));
+            Assert.True(File.Exists(Path.Combine(androidRoot, "puerts-unity-mcp.androidlib", "AndroidManifest.xml")));
+
+            var repoRoot = Path.GetFullPath(Path.Combine(packageRoot, "..", ".."));
+            Assert.True(File.Exists(Path.Combine(repoRoot, "third_party", "puerts", "unity", "upms", "v8", "Plugins", "Android", "libs", "arm64-v8a", "libPapiV8.so")));
+            Assert.True(File.Exists(Path.Combine(repoRoot, "third_party", "puerts", "unity", "upms", "core", "Plugins", "Android", "libs", "arm64-v8a", "libPuertsCore.so")));
+            Assert.True(File.Exists(Path.Combine(repoRoot, "third_party", "puerts", "unity", "upms", "core", "Plugins", "Android", "libs", "arm64-v8a", "libWSPPAddon.so")));
 
             var script = File.ReadAllText(Path.Combine(packageRoot, "Tools~", "pum-cli-lib.mjs"));
+            StringAssert.Contains("resolvePumAndroidPluginRoot", script);
+            StringAssert.Contains("return path.join(resolvePumPackageRoot(projectRoot, options), \"Runtime\", \"Plugins\", \"Android\")", script);
+            StringAssert.Contains("verifyPuerTsAndroidNativeLibraries", script);
             var start = script.IndexOf("export function removePumFromBuild", StringComparison.Ordinal);
             var end = script.IndexOf("export function syncLocalPackage", start, StringComparison.Ordinal);
 
@@ -248,25 +255,55 @@ namespace PuertsUnityMcp.Tests
             var body = script.Substring(start, end - start);
 
             Assert.AreEqual(-1, body.IndexOf("removeAndroidPermissions(projectRoot, options)", StringComparison.Ordinal));
-            Assert.AreEqual(-1, body.IndexOf("removeAndroidNativeLibraries(projectRoot, options)", StringComparison.Ordinal));
         }
 
         [Test]
-        public void PlayerAssemblyHasNoSharedAssembly()
+        public void SyncScriptDoesNotCopyLocalAgentStateOrRemoveExtensionGeneratedFiles()
         {
             var packageRoot = ResolvePackageRootForTest();
-            var playerAsmdef = File.ReadAllText(Path.Combine(packageRoot, "Player", "PuertsUnityMcp.Player.asmdef"));
+            var script = File.ReadAllText(Path.Combine(packageRoot, "Tools~", "pum-cli-lib.mjs"));
+
+            StringAssert.Contains("\".git\"", script);
+            StringAssert.Contains("\".puerts-unity-mcp\"", script);
+            StringAssert.Contains("copyDirectoryMirror(repoRoot, localPackageRoot, localPackageSyncIgnoredNames)", script);
+            StringAssert.Contains("copyDirectoryOverlay(localPackageRoot, repoRoot, localPackageSyncIgnoredNames)", script);
+
+            var start = script.IndexOf("function removeLegacyProjectGeneratedPluginArtifacts", StringComparison.Ordinal);
+            var end = script.IndexOf("function defaultMobileConfig", start, StringComparison.Ordinal);
+            Assert.GreaterOrEqual(start, 0);
+            Assert.Greater(end, start);
+
+            var body = script.Substring(start, end - start);
+            Assert.AreEqual(-1, body.IndexOf("puerts-unity-mcp-extension", StringComparison.Ordinal));
+            StringAssert.Contains("path.join(\"Assets\", \"Gen\", \"Plugins\", \"puerts_il2cpp\")", body);
+        }
+
+        [Test]
+        public void RuntimeAssemblyOwnsEditorPlayModeAndPlayerTargets()
+        {
+            var packageRoot = ResolvePackageRootForTest();
             var runtimeAsmdef = File.ReadAllText(Path.Combine(packageRoot, "Runtime", "PuertsUnityMcp.Runtime.asmdef"));
 
-            StringAssert.Contains("\"name\": \"PuertsUnityMcp.Player\"", playerAsmdef);
-            StringAssert.Contains("\"excludePlatforms\"", playerAsmdef);
-            StringAssert.Contains("\"Editor\"", playerAsmdef);
-            StringAssert.Contains("\"defineConstraints\"", playerAsmdef);
-            Assert.False(playerAsmdef.Contains("PuertsUnityMcp.Shared"));
+            Assert.False(Directory.Exists(Path.Combine(packageRoot, "Player")));
             StringAssert.Contains("\"name\": \"PuertsUnityMcp.Runtime\"", runtimeAsmdef);
             StringAssert.Contains("\"defineConstraints\"", runtimeAsmdef);
-            StringAssert.Contains("\"UNITY_EDITOR\"", runtimeAsmdef);
+            Assert.False(runtimeAsmdef.Contains("\"UNITY_EDITOR\""));
+            Assert.False(runtimeAsmdef.Contains("PuertsUnityMcp.Shared"));
             Assert.False(runtimeAsmdef.Contains("\"includePlatforms\": [\n    \"Editor\""));
+        }
+
+        [Test]
+        public void PuertsGeneratedFilesLiveUnderRuntimeExtensionLayout()
+        {
+            var packageRoot = ResolvePackageRootForTest();
+            var thirdPartyRoot = Path.GetFullPath(Path.Combine(packageRoot, "..", "..", "third_party", "puerts"));
+            var pathHelper = File.ReadAllText(Path.Combine(thirdPartyRoot, "unity", "upms", "core", "Editor", "Src", "Generator", "PathHelper.cs"));
+            var configure = File.ReadAllText(Path.Combine(thirdPartyRoot, "unity", "upms", "core", "Editor", "Src", "Configure.cs"));
+
+            StringAssert.Contains("\"puerts-unity-mcp-extension\", \"Runtime\", \"Plugins\", \"puerts_il2cpp\"", pathHelper);
+            StringAssert.Contains("\"puerts-unity-mcp-extension\", \"Runtime\", \"Generated\"", configure);
+            Assert.False(pathHelper.Contains("\"puerts-unity-mcp-extension\", \"Plugins\", \"puerts_il2cpp\""));
+            Assert.False(configure.Contains("\"puerts-unity-mcp-extension\", \"Generated\""));
         }
 
         [Test]

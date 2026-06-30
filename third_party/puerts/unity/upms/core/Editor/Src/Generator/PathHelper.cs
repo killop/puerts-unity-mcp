@@ -43,7 +43,7 @@ namespace Puerts.Editor.Generator
             var manifestPath = Path.Combine(projectRoot, "Packages", "manifest.json");
             if (Directory.Exists(localPackagePath) || ManifestReferencesPuertsUnityMcp(manifestPath))
             {
-                return Path.Combine(projectRoot, "puerts-unity-mcp-extension", "Plugins", "puerts_il2cpp") + Path.DirectorySeparatorChar;
+                return Path.Combine(projectRoot, "puerts-unity-mcp-extension", "Runtime", "Plugins", "puerts_il2cpp") + Path.DirectorySeparatorChar;
             }
 
             return null;

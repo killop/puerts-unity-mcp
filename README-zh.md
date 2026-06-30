@@ -140,7 +140,7 @@ node <UnityProject>/puerts-unity-mcp/Packages/puerts-unity-mcp/Tools~/remove-pum
 
 - 添加本地 PuerTS 和 PuerTS Unity MCP package 依赖
 - 把 `puerts-unity-mcp-extension/mobile-mcp-config.json` 复制到 `Assets/StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json`
-- 确认 `Packages/puerts-unity-mcp/Plugins/Android` 下随包提供的 Android native libraries 和权限库存在
+- 确认 `third_party/puerts` 下官方 PuerTS Android native libraries 存在，并使用 `Packages/puerts-unity-mcp/Runtime/Plugins/Android` 下随包提供的 MCP Android 权限库
 - 使用适合手机的低 IO 默认配置
 
 `remove-pum-from-build.mjs` 会移除构建依赖和复制到 `StreamingAssets` 的配置，但不会删除 package 自带的 Android plugin 文件。
@@ -355,8 +355,8 @@ C# 侧 JSON 序列化只使用 Unity `JsonUtility`。项目不依赖 Newtonsoft.
 |---|---|
 | `puerts-unity-mcp-extension/editor-mcp-config.json` | Editor、Agent、target 选择、LAN discovery 配置 |
 | `puerts-unity-mcp-extension/mobile-mcp-config.json` | Runtime / Player 配置，会复制进构建 |
-| `Packages/puerts-unity-mcp/Plugins/Android` | 随包提供的 Android PuerTS native libraries 和 MCP 权限库 |
-| `puerts-unity-mcp-extension/Plugins/puerts_il2cpp` | 当前 Unity 工程生成的 PuerTS IL2CPP bridge 文件；应忽略并按工程重新生成，不要当成通用 package 源码提交 |
+| `Packages/puerts-unity-mcp/Runtime/Plugins/Android` | 随包提供的 MCP Android 权限库；PuerTS native libraries 来自 `third_party/puerts` 官方 UPM 包 |
+| `puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp` | 当前 Unity 工程生成的 PuerTS IL2CPP bridge 文件；应忽略并按工程重新生成，不要当成通用 package 源码提交 |
 | `puerts-unity-mcp-extension/Editor/editor-tools` | 项目 Editor JS MCP tools |
 | `puerts-unity-mcp-extension/Runtime/runtime-tools` | 项目 Runtime JS MCP tools |
 | `puerts-unity-mcp-extension/skills` | 给 Agent 使用的项目技能 |
@@ -370,14 +370,29 @@ C# 侧 JSON 序列化只使用 Unity `JsonUtility`。项目不依赖 Newtonsoft.
 | `.puerts-unity-mcp/ops/{operationId}` | 持久 operation 状态和结果 |
 | `.puerts-unity-mcp/temp/compile-results` | 编译结果提示 |
 
+## Unity 工程 `.gitignore`
+
+在 Unity 工程的 `.gitignore` 里加入：
+
+```gitignore
+# PuerTS Unity MCP 运行状态和工程本地生成文件
+.puerts-unity-mcp/
+puerts-unity-mcp-extension/Runtime/Generated/
+puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp/
+```
+
+不要忽略整个 `puerts-unity-mcp-extension` 目录。这个目录里的项目配置、JS tools、skills 属于持久项目资产，如果它们需要随项目走，可以提交。也不要忽略 `puerts-unity-mcp/Packages/puerts-unity-mcp/Runtime/Plugins/Android`，这里是 package 自带的 Android 权限库。PuerTS 官方 `.so` 来自 `third_party/puerts`，不要在 MCP package 里重复提交。
+
+`puerts-unity-mcp/third_party/puerts/unity/.gitignore` 来自官方 PuerTS，会忽略 Unity 为 vendored PuerTS UPM 包自动生成的 `*.meta`。这些文件在本机打开 Unity 后出现是正常的，不需要提交；官方已经提供的 native plugin `.meta` 会随源码保留。
+
 ## 目录结构
 
 ```text
 puerts-unity-mcp
   Packages/puerts-unity-mcp
     Editor/      Editor MCP endpoint 和 Unity 菜单
-    Runtime/     Editor Play Mode 使用的 Runtime MCP assembly
-    Player/      Android、iOS 和 standalone 构建使用的非 Editor Player MCP assembly
+    Runtime/     Editor Play Mode、Android、iOS 和 standalone 共用的 Runtime MCP assembly
+      Plugins/   随 package 提供的 Runtime native/plugin assets
     Tools~/      Node 安装、构建、同步和 stdio proxy 工具
     Tests/       Unity Editor tests
   docs/

@@ -17,6 +17,21 @@ Use these paths after the package has been synced into a Unity project root:
 
 The Unity project root should not contain generated `.mcp.json`, `.cursor`, `.codex`, `.claude`, `*-plugin`, or root `skills` directories from this package.
 
+## Unity Project `.gitignore`
+
+Ensure the Unity project `.gitignore` contains:
+
+```gitignore
+# PuerTS Unity MCP runtime state and generated project-local files
+.puerts-unity-mcp/
+puerts-unity-mcp-extension/Runtime/Generated/
+puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp/
+```
+
+Do not ignore the whole `puerts-unity-mcp-extension` directory. Project configs, JavaScript MCP tools, and skills under that directory are persistent project assets. Do not ignore `puerts-unity-mcp/Packages/puerts-unity-mcp/Runtime/Plugins/Android`; that folder contains the MCP Android permission library. Upstream PuerTS `.so` files come from `third_party/puerts`, not from the MCP package.
+
+The vendored PuerTS directory has its own upstream `.gitignore` at `puerts-unity-mcp/third_party/puerts/unity/.gitignore`. It ignores Unity-generated `*.meta` files for PuerTS packages, so those local files may appear after Unity opens the project but should not be committed.
+
 ## Codex
 
 Add this to the agent workspace Codex config, replacing `<UnityProject>` with the absolute Unity project path:
@@ -64,9 +79,9 @@ The stdio proxy reads local extension files through the system filesystem. When 
 
 Runtime MCP uses low-IO defaults for phones: `enableFileCommandPump`, `enableDiskHeartbeat`, `enableDiscoveredEndpointCache`, and `enableAotMissLog` default to `false`; `screen.screenshot` defaults to in-memory PNG base64 with `screenshotWriteMode: "memory"`.
 
-For player builds, use the package tools instead of Unity Scripting Define Symbols. `add-pum-to-build.mjs` adds the PuerTS Unity MCP package dependencies, copies `<UnityProject>/puerts-unity-mcp-extension/mobile-mcp-config.json` into `Assets/StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json`, and verifies the Android native libraries and MCP permission library bundled under `Packages/puerts-unity-mcp/Plugins/Android`. `remove-pum-from-build.mjs` removes the build dependency entries and copied `StreamingAssets` config again, but keeps the bundled Android plugin files in the package.
+For player builds, use the package tools instead of Unity Scripting Define Symbols. `add-pum-to-build.mjs` adds the PuerTS Unity MCP package dependencies, copies `<UnityProject>/puerts-unity-mcp-extension/mobile-mcp-config.json` into `Assets/StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json`, verifies the upstream PuerTS Android native libraries under `third_party/puerts`, and uses the MCP permission library bundled under `Packages/puerts-unity-mcp/Runtime/Plugins/Android`. `remove-pum-from-build.mjs` removes the build dependency entries and copied `StreamingAssets` config again, but keeps the bundled MCP Android permission library in the package.
 
-PuerTS IL2CPP bridge files are generated per Unity project under `<UnityProject>/puerts-unity-mcp-extension/Plugins/puerts_il2cpp`. Treat that folder as generated output: ignore it in reusable package source and regenerate it for the current Unity/IL2CPP environment.
+PuerTS IL2CPP bridge files are generated per Unity project under `<UnityProject>/puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp`. Treat that folder as generated output: ignore it in reusable package source and regenerate it for the current Unity/IL2CPP environment.
 
 The Editor MCP can still route to local Play Mode runtime targets when the Unity Editor is open.
 

@@ -140,7 +140,7 @@ The add script:
 
 - adds the local PuerTS and PuerTS Unity MCP package dependencies
 - copies `puerts-unity-mcp-extension/mobile-mcp-config.json` to `Assets/StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json`
-- verifies the Android native libraries and permission library bundled under `Packages/puerts-unity-mcp/Plugins/Android`
+- verifies the upstream PuerTS Android native libraries under `third_party/puerts` and uses the MCP Android permission library bundled under `Packages/puerts-unity-mcp/Runtime/Plugins/Android`
 - keeps runtime defaults low-IO for phones
 
 `remove-pum-from-build.mjs` removes the build dependency entries and copied `StreamingAssets` config, but it does not delete the bundled Android plugin files from the package.
@@ -355,8 +355,8 @@ Persistent project configuration:
 |---|---|
 | `puerts-unity-mcp-extension/editor-mcp-config.json` | Editor, agent, target selection, LAN discovery config |
 | `puerts-unity-mcp-extension/mobile-mcp-config.json` | Runtime/player config copied into builds |
-| `Packages/puerts-unity-mcp/Plugins/Android` | Bundled Android PuerTS native libraries and MCP permission library |
-| `puerts-unity-mcp-extension/Plugins/puerts_il2cpp` | Generated PuerTS IL2CPP bridge files for the current Unity project; ignore/regenerate instead of committing as reusable package source |
+| `Packages/puerts-unity-mcp/Runtime/Plugins/Android` | Bundled MCP Android permission library; PuerTS native libraries come from the upstream UPM packages under `third_party/puerts` |
+| `puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp` | Generated PuerTS IL2CPP bridge files for the current Unity project; ignore/regenerate instead of committing as reusable package source |
 | `puerts-unity-mcp-extension/Editor/editor-tools` | Project Editor JS MCP tools |
 | `puerts-unity-mcp-extension/Runtime/runtime-tools` | Project Runtime JS MCP tools |
 | `puerts-unity-mcp-extension/skills` | Project skills for agents |
@@ -370,14 +370,29 @@ Temporary state and operation data:
 | `.puerts-unity-mcp/ops/{operationId}` | Persistent operation state/result |
 | `.puerts-unity-mcp/temp/compile-results` | Compile result hints |
 
+## Unity Project `.gitignore`
+
+Add these entries to the Unity project `.gitignore`:
+
+```gitignore
+# PuerTS Unity MCP runtime state and generated project-local files
+.puerts-unity-mcp/
+puerts-unity-mcp-extension/Runtime/Generated/
+puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp/
+```
+
+Do not ignore the whole `puerts-unity-mcp-extension` directory. Project configs, JS tools, and skills under that directory are persistent project assets and may be committed when they are intended to travel with the project. Do not ignore `puerts-unity-mcp/Packages/puerts-unity-mcp/Runtime/Plugins/Android`; that folder contains the MCP Android permission library. Upstream PuerTS `.so` files come from `third_party/puerts`; do not duplicate them inside the MCP package.
+
+`puerts-unity-mcp/third_party/puerts/unity/.gitignore` comes from upstream PuerTS and ignores `*.meta` files Unity may generate for the vendored PuerTS UPM packages. Seeing those files after opening the Unity project is normal; do not commit them. Native plugin `.meta` files that upstream PuerTS already provides remain part of the source tree.
+
 ## Directory Structure
 
 ```text
 puerts-unity-mcp
   Packages/puerts-unity-mcp
     Editor/      Editor MCP endpoint and Unity menus
-    Runtime/     Editor Play Mode Runtime MCP assembly
-    Player/      Non-Editor Player MCP assembly for Android, iOS, and standalone builds
+    Runtime/     Runtime MCP assembly for Editor Play Mode, Android, iOS, and standalone builds
+      Plugins/   Runtime native/plugin assets bundled with the package
     Tools~/      Node install, build, sync, and stdio proxy tools
     Tests/       Unity Editor tests
   docs/
