@@ -258,7 +258,7 @@ namespace PuertsUnityMcp.Tests
         }
 
         [Test]
-        public void SyncScriptDoesNotCopyLocalAgentStateOrRemoveExtensionGeneratedFiles()
+        public void SyncScriptDoesNotCopyLocalAgentStateAndCleansLegacyGeneratedFiles()
         {
             var packageRoot = ResolvePackageRootForTest();
             var script = File.ReadAllText(Path.Combine(packageRoot, "Tools~", "pum-cli-lib.mjs"));
@@ -274,8 +274,10 @@ namespace PuertsUnityMcp.Tests
             Assert.Greater(end, start);
 
             var body = script.Substring(start, end - start);
-            Assert.AreEqual(-1, body.IndexOf("puerts-unity-mcp-extension", StringComparison.Ordinal));
             StringAssert.Contains("path.join(\"Assets\", \"Gen\", \"Plugins\", \"puerts_il2cpp\")", body);
+            StringAssert.Contains("path.join(\"Assets\", \"puerts-unity-mcp\", \"Runtime\", \"Plugins\", \"puerts_il2cpp\")", body);
+            StringAssert.Contains("path.join(\"puerts-unity-mcp-extension\", \"Runtime\", \"Generated\")", body);
+            StringAssert.Contains("path.join(\"puerts-unity-mcp-extension\", \"Runtime\", \"Plugins\", \"puerts_il2cpp\")", body);
         }
 
         [Test]
@@ -293,17 +295,26 @@ namespace PuertsUnityMcp.Tests
         }
 
         [Test]
-        public void PuertsGeneratedFilesLiveUnderRuntimeExtensionLayout()
+        public void PuertsGeneratedFilesUsePackageConfigureUnderAssets()
         {
             var packageRoot = ResolvePackageRootForTest();
             var thirdPartyRoot = Path.GetFullPath(Path.Combine(packageRoot, "..", "..", "third_party", "puerts"));
             var pathHelper = File.ReadAllText(Path.Combine(thirdPartyRoot, "unity", "upms", "core", "Editor", "Src", "Generator", "PathHelper.cs"));
             var configure = File.ReadAllText(Path.Combine(thirdPartyRoot, "unity", "upms", "core", "Editor", "Src", "Configure.cs"));
+            var pumConfigure = File.ReadAllText(Path.Combine(packageRoot, "Editor", "PuertsUnityMcpPuertsConfigure.cs"));
+            var editorAsmdef = File.ReadAllText(Path.Combine(packageRoot, "Editor", "PuertsUnityMcp.Editor.asmdef"));
 
-            StringAssert.Contains("\"puerts-unity-mcp-extension\", \"Runtime\", \"Plugins\", \"puerts_il2cpp\"", pathHelper);
-            StringAssert.Contains("\"puerts-unity-mcp-extension\", \"Runtime\", \"Generated\"", configure);
+            StringAssert.Contains("return Path.Combine(Puerts.Configure.GetCodeOutputDirectory(), \"Plugins/puerts_il2cpp/\")", pathHelper);
+            StringAssert.Contains("return UnityEngine.Application.dataPath + \"/Gen/\";", configure);
+            StringAssert.Contains("[CodeOutputDirectory]", pumConfigure);
+            StringAssert.Contains("\"puerts-unity-mcp\", \"Runtime\", \"Generated\"", pumConfigure);
+            StringAssert.Contains("\"com.tencent.puerts.core.Editor\"", editorAsmdef);
             Assert.False(pathHelper.Contains("\"puerts-unity-mcp-extension\", \"Plugins\", \"puerts_il2cpp\""));
             Assert.False(configure.Contains("\"puerts-unity-mcp-extension\", \"Generated\""));
+            Assert.False(pumConfigure.Contains("\"puerts-unity-mcp-extension\""));
+            Assert.False(pathHelper.Contains("GetPuertsUnityMcpExtensionPluginPath"));
+            Assert.False(pathHelper.Contains("\"puerts-unity-mcp-extension\", \"Runtime\", \"Plugins\", \"puerts_il2cpp\""));
+            Assert.False(configure.Contains("\"puerts-unity-mcp-extension\", \"Runtime\", \"Generated\""));
         }
 
         [Test]

@@ -3,8 +3,8 @@
 .mcp_data/
 .tmp/
 .puerts-unity-mcp/
-puerts-unity-mcp-extension/Runtime/Generated/
-puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp/
+Assets/puerts-unity-mcp/Runtime/Generated/
+Assets/puerts-unity-mcp/Runtime/Generated/Plugins/puerts_il2cpp/
 
 # Logs and transient test outputs
 *.log

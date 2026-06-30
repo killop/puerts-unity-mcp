@@ -2,7 +2,8 @@
   "name": "PuertsUnityMcp.Editor",
   "rootNamespace": "PuertsUnityMcp.Editor",
   "references": [
-    "PuertsUnityMcp.Runtime"
+    "PuertsUnityMcp.Runtime",
+    "com.tencent.puerts.core.Editor"
   ],
   "includePlatforms": [
     "Editor"

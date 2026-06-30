@@ -411,7 +411,7 @@ C# 侧 JSON 序列化只使用 Unity `JsonUtility`。项目不依赖 Newtonsoft.
 | `puerts-unity-mcp-extension/editor-mcp-config.json` | Editor、Agent、target 选择、LAN discovery 配置 |
 | `puerts-unity-mcp-extension/mobile-mcp-config.json` | Runtime / Player 配置，会复制进构建 |
 | `Packages/puerts-unity-mcp/Runtime/Plugins/Android` | 随包提供的 MCP Android 权限库；PuerTS native libraries 来自 `third_party/puerts` 官方 UPM 包 |
-| `puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp` | 当前 Unity 工程生成的 PuerTS IL2CPP bridge 文件；应忽略并按工程重新生成，不要当成通用 package 源码提交 |
+| `Assets/puerts-unity-mcp/Runtime/Generated/Plugins/puerts_il2cpp` | 当前 Unity 工程生成的 PuerTS IL2CPP bridge 文件；应忽略并按工程重新生成，不要当成通用 package 源码提交 |
 | `puerts-unity-mcp-extension/Editor/editor-tools` | 项目 Editor JS MCP tools |
 | `puerts-unity-mcp-extension/Runtime/runtime-tools` | 项目 Runtime JS MCP tools |
 | `puerts-unity-mcp-extension/skills` | 给 Agent 使用的项目技能 |
@@ -432,8 +432,8 @@ C# 侧 JSON 序列化只使用 Unity `JsonUtility`。项目不依赖 Newtonsoft.
 ```gitignore
 # PuerTS Unity MCP 运行状态和工程本地生成文件
 .puerts-unity-mcp/
-puerts-unity-mcp-extension/Runtime/Generated/
-puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp/
+Assets/puerts-unity-mcp/Runtime/Generated/
+Assets/puerts-unity-mcp/Runtime/Generated/Plugins/puerts_il2cpp/
 ```
 
 不要忽略整个 `puerts-unity-mcp-extension` 目录。这个目录里的项目配置、JS tools、skills 属于持久项目资产，如果它们需要随项目走，可以提交。也不要忽略 `puerts-unity-mcp/Packages/puerts-unity-mcp/Runtime/Plugins/Android`，这里是 package 自带的 Android 权限库。PuerTS 官方 `.so` 来自 `third_party/puerts`，不要在 MCP package 里重复提交。

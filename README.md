@@ -411,7 +411,7 @@ Persistent project configuration:
 | `puerts-unity-mcp-extension/editor-mcp-config.json` | Editor, agent, target selection, LAN discovery config |
 | `puerts-unity-mcp-extension/mobile-mcp-config.json` | Runtime/player config copied into builds |
 | `Packages/puerts-unity-mcp/Runtime/Plugins/Android` | Bundled MCP Android permission library; PuerTS native libraries come from the upstream UPM packages under `third_party/puerts` |
-| `puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp` | Generated PuerTS IL2CPP bridge files for the current Unity project; ignore/regenerate instead of committing as reusable package source |
+| `Assets/puerts-unity-mcp/Runtime/Generated/Plugins/puerts_il2cpp` | Generated PuerTS IL2CPP bridge files for the current Unity project; ignore/regenerate instead of committing as reusable package source |
 | `puerts-unity-mcp-extension/Editor/editor-tools` | Project Editor JS MCP tools |
 | `puerts-unity-mcp-extension/Runtime/runtime-tools` | Project Runtime JS MCP tools |
 | `puerts-unity-mcp-extension/skills` | Project skills for agents |
@@ -432,8 +432,8 @@ Add these entries to the Unity project `.gitignore`:
 ```gitignore
 # PuerTS Unity MCP runtime state and generated project-local files
 .puerts-unity-mcp/
-puerts-unity-mcp-extension/Runtime/Generated/
-puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp/
+Assets/puerts-unity-mcp/Runtime/Generated/
+Assets/puerts-unity-mcp/Runtime/Generated/Plugins/puerts_il2cpp/
 ```
 
 Do not ignore the whole `puerts-unity-mcp-extension` directory. Project configs, JS tools, and skills under that directory are persistent project assets and may be committed when they are intended to travel with the project. Do not ignore `puerts-unity-mcp/Packages/puerts-unity-mcp/Runtime/Plugins/Android`; that folder contains the MCP Android permission library. Upstream PuerTS `.so` files come from `third_party/puerts`; do not duplicate them inside the MCP package.

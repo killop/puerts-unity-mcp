@@ -24,8 +24,8 @@ Ensure the Unity project `.gitignore` contains:
 ```gitignore
 # PuerTS Unity MCP runtime state and generated project-local files
 .puerts-unity-mcp/
-puerts-unity-mcp-extension/Runtime/Generated/
-puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp/
+Assets/puerts-unity-mcp/Runtime/Generated/
+Assets/puerts-unity-mcp/Runtime/Generated/Plugins/puerts_il2cpp/
 ```
 
 Do not ignore the whole `puerts-unity-mcp-extension` directory. Project configs, JavaScript MCP tools, and skills under that directory are persistent project assets. Do not ignore `puerts-unity-mcp/Packages/puerts-unity-mcp/Runtime/Plugins/Android`; that folder contains the MCP Android permission library. Upstream PuerTS `.so` files come from `third_party/puerts`, not from the MCP package.
@@ -81,7 +81,7 @@ Runtime MCP uses low-IO defaults for phones: `enableFileCommandPump`, `enableDis
 
 For player builds, use the package tools instead of Unity Scripting Define Symbols. `add-pum-to-build.mjs` adds the PuerTS Unity MCP package dependencies, copies `<UnityProject>/puerts-unity-mcp-extension/mobile-mcp-config.json` into `Assets/StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json`, verifies the upstream PuerTS Android native libraries under `third_party/puerts`, and uses the MCP permission library bundled under `Packages/puerts-unity-mcp/Runtime/Plugins/Android`. `remove-pum-from-build.mjs` removes the build dependency entries and copied `StreamingAssets` config again, but keeps the bundled MCP Android permission library in the package.
 
-PuerTS IL2CPP bridge files are generated per Unity project under `<UnityProject>/puerts-unity-mcp-extension/Runtime/Plugins/puerts_il2cpp`. Treat that folder as generated output: ignore it in reusable package source and regenerate it for the current Unity/IL2CPP environment.
+PuerTS generated C# files are generated per Unity project under `<UnityProject>/Assets/puerts-unity-mcp/Runtime/Generated`; the upstream PuerTS IL2CPP bridge path is derived from that and lands under `<UnityProject>/Assets/puerts-unity-mcp/Runtime/Generated/Plugins/puerts_il2cpp`. Treat those folders as generated output: ignore them in reusable package source and regenerate them for the current Unity/IL2CPP environment.
 
 The Editor MCP can still route to local Play Mode runtime targets when the Unity Editor is open.
 

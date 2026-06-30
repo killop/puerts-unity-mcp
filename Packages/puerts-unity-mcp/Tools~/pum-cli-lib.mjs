@@ -128,6 +128,7 @@ export function resolveDependencyPrefix(options = {}) {
 
 export function addPumToBuild(projectRoot, options = {}) {
   assertUnityProjectRoot(projectRoot);
+  repairUnityPackageImportMetas(projectRoot, options);
   updateManifestAdd(projectRoot, options);
   copyMobileConfig(projectRoot);
   removeLegacyProjectAndroidPluginArtifacts(projectRoot);
@@ -427,6 +428,86 @@ function copyMobileConfig(projectRoot) {
   console.log(`Copied ${source} to ${destination}`);
 }
 
+export function repairUnityPackageImportMetas(projectRoot, options = {}) {
+  repairPuerTsOpenHarmonyMetas(projectRoot, options);
+  repairChatSdkAndroidBundleMeta(projectRoot);
+}
+
+function repairPuerTsOpenHarmonyMetas(projectRoot, options = {}) {
+  const repoRoot = resolvePumRepoRoot(projectRoot, options);
+  const repairs = [
+    {
+      relativePath: path.join("third_party", "puerts", "unity", "upms", "v8", "Plugins", "OpenHarmony", "libs", "arm64-v8a", "libPapiV8.so.meta"),
+      guid: "f6ef5e9504d64d20a270415dcff9e001"
+    },
+    {
+      relativePath: path.join("third_party", "puerts", "unity", "upms", "v8", "Plugins", "OpenHarmony", "libs", "armeabi-v7a", "libPapiV8.so.meta"),
+      guid: "65bb986bc8954b5cb4201f9a1a5e4b02"
+    }
+  ];
+
+  for (const repair of repairs) {
+    repairUnityMetaGuid(path.join(repoRoot, repair.relativePath), repair.guid);
+  }
+}
+
+function repairChatSdkAndroidBundleMeta(projectRoot) {
+  const packageCache = path.join(projectRoot, "Library", "PackageCache");
+  if (!fs.existsSync(packageCache)) {
+    return;
+  }
+
+  for (const entry of fs.readdirSync(packageCache, { withFileTypes: true })) {
+    if (!entry.isDirectory() || !entry.name.startsWith("com.zmxt.unitychatsdk@")) {
+      continue;
+    }
+
+    const androidDirectory = path.join(packageCache, entry.name, "ChatSDK", "Bundles", "Android");
+    if (fs.existsSync(androidDirectory)) {
+      ensureUnityFolderMeta(androidDirectory, "a62c56ffea7d4567a87c8e91cbab70d8");
+    }
+  }
+}
+
+function repairUnityMetaGuid(metaPath, guid) {
+  if (!fs.existsSync(metaPath)) {
+    return;
+  }
+
+  const text = fs.readFileSync(metaPath, "utf8");
+  const match = text.match(/^guid:\s*(.+)$/m);
+  if (match && match[1].trim() === guid) {
+    return;
+  }
+
+  const next = match
+    ? text.replace(/^guid:\s*.+$/m, `guid: ${guid}`)
+    : text.replace(/^fileFormatVersion:\s*2\s*$/m, `fileFormatVersion: 2\nguid: ${guid}`);
+  fs.writeFileSync(metaPath, next, "utf8");
+  console.log(`Repaired Unity meta guid: ${metaPath}`);
+}
+
+function ensureUnityFolderMeta(directory, guid) {
+  const metaPath = `${directory}.meta`;
+  if (fs.existsSync(metaPath)) {
+    repairUnityMetaGuid(metaPath, guid);
+    return;
+  }
+
+  fs.writeFileSync(metaPath, [
+    "fileFormatVersion: 2",
+    `guid: ${guid}`,
+    "folderAsset: yes",
+    "DefaultImporter:",
+    "  externalObjects: {}",
+    "  userData:",
+    "  assetBundleName:",
+    "  assetBundleVariant:",
+    ""
+  ].join("\n"), "utf8");
+  console.log(`Created Unity folder meta: ${metaPath}`);
+}
+
 function verifyPuerTsAndroidNativeLibraries(projectRoot, options) {
   const repoRoot = resolvePumRepoRoot(projectRoot, options);
   const missing = [];
@@ -554,6 +635,12 @@ function removeLegacyProjectGeneratedPluginArtifacts(projectRoot) {
   removePathInsideProject(projectRoot, path.join("Assets", "Gen", "Plugins", "puerts_il2cpp"));
   removeEmptyDirectory(projectRoot, path.join("Assets", "Gen", "Plugins"));
   removeEmptyDirectory(projectRoot, path.join("Assets", "Gen"));
+  removePathInsideProject(projectRoot, path.join("Assets", "puerts-unity-mcp", "Runtime", "Plugins", "puerts_il2cpp"));
+  removeEmptyDirectory(projectRoot, path.join("Assets", "puerts-unity-mcp", "Runtime", "Plugins"));
+  removePathInsideProject(projectRoot, path.join("puerts-unity-mcp-extension", "Runtime", "Generated"));
+  removePathInsideProject(projectRoot, path.join("puerts-unity-mcp-extension", "Runtime", "Plugins", "puerts_il2cpp"));
+  removeEmptyDirectory(projectRoot, path.join("puerts-unity-mcp-extension", "Runtime", "Plugins"));
+  removeEmptyDirectory(projectRoot, path.join("puerts-unity-mcp-extension", "Runtime"));
 }
 
 function defaultMobileConfig() {
