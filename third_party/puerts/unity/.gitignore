@@ -36,6 +36,29 @@ node_modules
 *.dylib
 *.dll
 *.pdb
+
+# puerts-unity-mcp vendors released core/v8 UPM packages. Keep their native
+# plugins and import settings trackable when copied into a Unity project repo.
+!/upms/core/Plugins/**/*.so
+!/upms/core/Plugins/**/*.so.meta
+!/upms/core/Plugins/**/*.a
+!/upms/core/Plugins/**/*.a.meta
+!/upms/core/Plugins/**/*.bundle
+!/upms/core/Plugins/**/*.bundle.meta
+!/upms/core/Plugins/**/*.dylib
+!/upms/core/Plugins/**/*.dylib.meta
+!/upms/core/Plugins/**/*.dll
+!/upms/core/Plugins/**/*.dll.meta
+!/upms/v8/Plugins/**/*.so
+!/upms/v8/Plugins/**/*.so.meta
+!/upms/v8/Plugins/**/*.a
+!/upms/v8/Plugins/**/*.a.meta
+!/upms/v8/Plugins/**/*.bundle
+!/upms/v8/Plugins/**/*.bundle.meta
+!/upms/v8/Plugins/**/*.dylib
+!/upms/v8/Plugins/**/*.dylib.meta
+!/upms/v8/Plugins/**/*.dll
+!/upms/v8/Plugins/**/*.dll.meta
 .idea
 /Library/
 /Logs/

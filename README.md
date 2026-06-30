@@ -219,6 +219,61 @@ Each JavaScript MCP tool has a manifest that points to a module:
 
 Runtime JavaScript tools execute through `runtime.js.eval`, so the same tool model works for Play Mode and real phones.
 
+## Built-in MCP Tools
+
+`tools/list` returns the tools currently available on the connected endpoint. The tables below list the package-provided C# tools. Project JavaScript tools are loaded in addition from `puerts-unity-mcp-extension`; project-specific tools such as `game.*` are not universal built-ins.
+
+### Editor MCP
+
+| Tool | Purpose |
+|---|---|
+| `mcp.info` | Return Editor endpoint metadata, health, and capabilities. |
+| `editor.state` | Return the current Unity Editor state. |
+| `editor.buildSettings.startupScene` | Return the first enabled scene in Build Settings. |
+| `editor.js.eval` | Execute JavaScript inside the Editor PuerTS VM without generating C# or normally triggering domain reload. |
+| `editor.scriptTools.list` | List project JavaScript tools from `puerts-unity-mcp-extension/Editor/editor-tools`. |
+| `editor.scriptTools.reload` | Reload Editor project JavaScript tools. |
+| `editor.skills.list` | List project skills from `puerts-unity-mcp-extension/skills`. |
+| `editor.skill.load` | Load one project skill. |
+| `editor.playmode.set` | Enter, exit, or toggle Play Mode through a delayed Editor request. |
+| `editor.playmode.state` | Return Play Mode state. |
+| `editor.playmode.set.immediate` | Enter, exit, or toggle Play Mode immediately. |
+| `editor.targets.list` | List this Editor and discovered LAN Editor endpoints in the same `name_group`. |
+| `runtime.targets.list` | List local Play Mode Runtime and discovered Player endpoints. |
+| `targets.list` | List Editor, Play Mode Runtime, LAN Editors, and real Player targets. |
+| `lan.discovery.scan` | Send LAN discovery and run configured HTTP fallback probes. |
+| `runtime.js.eval` | Forward JavaScript from the Editor to local Play Mode Runtime or a remote Player/phone. |
+| `runtime.tool.call` | Call a runtime MCP tool in local Play Mode or a remote Player target. |
+| `editor.compile` | Trigger `AssetDatabase.Refresh` and persist compile result hints for domain reload recovery tests. |
+| `op.status` | Read persisted operation state or result. |
+
+### Runtime / Player MCP
+
+These tools are available in Editor Play Mode, Android, iOS, and standalone Player endpoints. Direct phone connections use this tool set.
+
+| Tool | Purpose |
+|---|---|
+| `mcp.info` | Return Runtime/Player endpoint metadata, health, and capabilities. |
+| `runtime.status` | Return Runtime/Player endpoint state. |
+| `runtime.targets.list` | List this Player endpoint and LAN endpoints discovered by this Player. |
+| `targets.list` | Alias for `runtime.targets.list`. |
+| `lan.discovery.scan` | Send a LAN discovery query for endpoints in the same `name_group`. |
+| `runtime.js.eval` | Execute JavaScript inside the Runtime PuerTS VM. |
+| `runtime.reflection.invoke` | Invoke a static C# method through the reflection gateway. |
+| `runtime.scriptTools.list` | List project JavaScript tools from `puerts-unity-mcp-extension/Runtime/runtime-tools`. |
+| `runtime.scriptTools.reload` | Reload Runtime project JavaScript tools. |
+| `runtime.skills.list` | List project skills. |
+| `runtime.skill.load` | Load one project skill. |
+| `op.status` | Read persisted operation state or result. |
+| `runtime.logs` | Return recent entries from the Runtime log ring buffer. |
+| `runtime.logs.clear` | Clear the Runtime log ring buffer. |
+| `screen.screenshot` | Capture the Player screen; phone defaults use in-memory PNG base64 to reduce device IO. |
+| `runtime.ui.snapshot` | Return a structured snapshot of visible UGUI canvases, buttons, and clickable controls. |
+| `runtime.ui.find` | Find UGUI controls by text, name, path, or canvas. |
+| `runtime.ui.raycast` | Raycast runtime UI at a screen point or resolved target. |
+| `runtime.ui.click` | Click a UGUI control by coordinates, path, or instanceId. |
+| `input.tap` | Alias for `runtime.ui.click`. |
+
 ## Agent PuerTS JS Guide
 
 This section is written for agents that need to generate JavaScript for `editor.js.eval`, `runtime.js.eval`, or project JavaScript MCP tools.

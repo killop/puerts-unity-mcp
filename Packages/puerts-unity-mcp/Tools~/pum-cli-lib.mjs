@@ -787,6 +787,11 @@ function copyDirectoryMirror(source, target, ignoredNames = new Set()) {
     throw new Error(`Source directory not found: ${source}`);
   }
 
+  if (process.platform === "win32") {
+    copyDirectoryMirrorWithRobocopy(source, target, ignoredNames);
+    return;
+  }
+
   removeDirectorySafe(target);
   ensureDirectory(target);
   for (const entry of fs.readdirSync(source, { withFileTypes: true })) {
@@ -794,7 +799,40 @@ function copyDirectoryMirror(source, target, ignoredNames = new Set()) {
       continue;
     }
 
-    copyRecursive(path.join(source, entry.name), path.join(target, entry.name));
+    copyRecursive(path.join(source, entry.name), path.join(target, entry.name), ignoredNames);
+  }
+}
+
+function copyDirectoryMirrorWithRobocopy(source, target, ignoredNames = new Set()) {
+  const args = [
+    source,
+    target,
+    "/MIR",
+    "/XJ",
+    "/R:1",
+    "/W:1",
+    "/MT:8",
+    "/NFL",
+    "/NDL",
+    "/NP"
+  ];
+
+  const ignored = Array.from(ignoredNames);
+  if (ignored.length > 0) {
+    args.push("/XD", ...ignored, "/XF", ...ignored);
+  }
+
+  const result = spawnSync("robocopy", args, { stdio: "inherit" });
+  if (result.error) {
+    throw result.error;
+  }
+
+  if (result.status === null) {
+    throw new Error(`robocopy did not exit cleanly: ${result.signal || "unknown signal"}`);
+  }
+
+  if (result.status >= 8) {
+    throw new Error(`robocopy failed with exit code ${result.status}`);
   }
 }
 
