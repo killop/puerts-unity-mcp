@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "unity": "2021.3",
   "description": "A reflection-first Unity MCP endpoint for Editor, Play Mode, and Player targets using PuerTS.",
+  "license": "MIT",
   "keywords": [
     "unity",
     "mcp",

@@ -473,6 +473,8 @@ puerts-unity-mcp
     Vendored PuerTS UPM packages 和 native plugins
 ```
 
-## 发布前注意
+## 开源协议
 
-当前根目录没有 `LICENSE` 文件。公开发布前建议补一个 license。
+PuerTS Unity MCP 使用 MIT License 发布，详见 [LICENSE](LICENSE)。
+
+`third_party/puerts` 下的第三方代码保留其上游 license 文件。

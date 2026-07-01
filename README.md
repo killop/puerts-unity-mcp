@@ -473,6 +473,8 @@ puerts-unity-mcp
     Vendored PuerTS UPM packages and native plugins
 ```
 
-## Notes Before Publishing
+## License
 
-No root `LICENSE` file is currently present. Add a license before publishing the repository publicly.
+PuerTS Unity MCP is released under the MIT License. See [LICENSE](LICENSE).
+
+Vendored third-party code under `third_party/puerts` keeps its upstream license files.
