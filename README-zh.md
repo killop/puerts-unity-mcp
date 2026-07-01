@@ -2,7 +2,7 @@
 <p align="center">
   <strong>通过 MCP 控制 Unity Editor、Play Mode 和真实手机游戏，并在运行中的游戏里动态执行 PuerTS JavaScript。</strong>
   <br />
-  <em>Android · iOS · IL2CPP · Editor JS · Runtime JS · C# 和 JS MCP Tool · Domain Reload 恢复</em>
+  <em>Android · iOS · IL2CPP · Editor JS · Runtime JS · UI 自动化 · 截图 · Profiler 报告 · Domain Reload 恢复</em>
 </p>
 
 <p align="center">
@@ -31,6 +31,10 @@
 | 支持 IL2CPP Player | 构建脚本会加入 PuerTS 包、native plugin、StreamingAssets 配置、Android 权限库和保留提示，用于手机和 IL2CPP 构建。 |
 | Editor 执行 JS 不触发 Domain Reload | `editor.js.eval` 在 Editor PuerTS VM 里执行 JS，不生成 C# 文件，不调用 `AssetDatabase.Refresh`，正常自动化流程不会触发 Unity domain reload。 |
 | Runtime 执行 JS | `runtime.js.eval` 可以指向本地 Play Mode，也可以指向远程 Player MCP，包括手机。 |
+| 聚焦 Unity 窗口 | 在视觉自动化或证据采集前，将 Unity Editor 进程/窗口置前。 |
+| Editor 和 Player 截图 | 截取 Game、Scene、Inspector、Console、Hierarchy 等 Unity EditorWindow，也可以截取 Runtime Player/手机画面。 |
+| UI 测试自动化 | 用 snapshot/find/raycast 识别可见 UGUI 控件，再按 text、path、instanceId 或屏幕坐标点击，适合沉淀可重复的 QA 流程。 |
+| Profiler 性能报告 | 通过 Unity Editor Profiler 采集 Editor 或已连接 Player/手机的数据，输出包含帧、marker、GC.Alloc 证据的热点报告。 |
 | C# 和 JS 扩展 MCP Tool | 核心工具用 C# 写，项目工具可以放在 `puerts-unity-mcp-extension/Editor/editor-tools` 和 `Runtime/runtime-tools` 里用 JS 写。 |
 | Domain Reload 稳定性 | Editor MCP 会持久化 operation、compile result、reload hint，并在 Unity domain reload 后自动恢复 HTTP endpoint。 |
 

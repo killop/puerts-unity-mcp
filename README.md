@@ -2,7 +2,7 @@
 <p align="center">
   <strong>Control Unity Editors, Play Mode, and real mobile games through MCP with dynamic PuerTS JavaScript.</strong>
   <br />
-  <em>Android · iOS · IL2CPP · Editor JS · Runtime JS · C# and JS MCP tools · Domain reload recovery</em>
+  <em>Android · iOS · IL2CPP · Editor JS · Runtime JS · UI automation · Screenshots · Profiler reports · Domain reload recovery</em>
 </p>
 
 <p align="center">
@@ -31,6 +31,10 @@
 | IL2CPP player support | Build tools add PuerTS packages, native plugins, StreamingAssets config, Android permissions, and preservation hints for player builds. |
 | Editor JavaScript without domain reload | `editor.js.eval` runs in the Editor PuerTS VM. It does not generate C# files, call `AssetDatabase.Refresh`, or trigger a Unity domain reload. |
 | Runtime JavaScript | `runtime.js.eval` targets local Play Mode or a remote Player MCP endpoint, including phones. |
+| Unity window focus | Bring the Unity Editor process/window to the foreground before visual automation or evidence capture. |
+| Editor and Player screenshots | Capture Unity EditorWindow tabs such as Game, Scene, Inspector, Console, or Hierarchy, and capture runtime Player/phone screens. |
+| UI testing automation | Inspect visible UGUI controls with snapshot/find/raycast tools and click by text, path, instanceId, or screen coordinates for repeatable QA flows. |
+| Profiler performance reports | Collect Unity Editor Profiler data for the Editor or attached Player/phone targets and generate hotspot reports with frame, marker, and GC.Alloc evidence. |
 | C# and JavaScript MCP tools | Core tools are C#; project tools can also be loaded from `puerts-unity-mcp-extension/Editor/editor-tools` and `Runtime/runtime-tools`. |
 | Domain reload recovery | The Editor endpoint persists operation state, compile results, reload hints, and restarts itself after Unity domain reloads. |
 
