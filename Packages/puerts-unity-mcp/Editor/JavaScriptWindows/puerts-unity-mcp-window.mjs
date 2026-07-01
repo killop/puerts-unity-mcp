@@ -97,14 +97,12 @@
         ctx.BoldLabel("Network");
         setString(ctx, cfg, "editorBindAddress", "Bind Address");
         setInt(ctx, cfg, "editorPort", "Port");
-        ctx.HelpBox("Use 0.0.0.0 when another computer should connect to this Editor MCP.", "none");
+        ctx.HelpBox("Use 0.0.0.0 when another computer should connect to this Editor MCP by explicit URL.", "none");
 
         ctx.Space(10);
-        ctx.BoldLabel("LAN Discovery");
-        setBool(ctx, cfg, "lanDiscoveryEnabled", "Enabled");
+        ctx.BoldLabel("Identity");
         setString(ctx, cfg, "name", "Name");
-        setString(ctx, cfg, "name_group", "Name Group");
-        ctx.HelpBox("UDP discovery can be blocked by firewall, AP isolation, VLAN routing, or network policy. Configure lanHttpProbeHosts or lanHttpProbeCidrs in editor-mcp-config.json for TCP/HTTP fallback.", "none");
+        ctx.HelpBox("Remote Editor and phone/player connections are explicit only. Set selectedTargetUrl in editor-mcp-config.json or pass --target-url to the proxy.", "none");
     }
 
     function drawRuntime(ctx, snap) {
@@ -119,7 +117,7 @@
         setString(ctx, cfg, "runtimeBindAddress", "Bind Address");
         setInt(ctx, cfg, "runtimePort", "Port");
         setInt(ctx, cfg, "runtimeLogBufferSize", "Log Buffer Size");
-        ctx.HelpBox("Use 0.0.0.0 for APK/IPA/standalone LAN direct so a PC agent can connect to the embedded Player MCP.", "none");
+        ctx.HelpBox("Use 0.0.0.0 for APK/IPA/standalone direct HTTP so a PC agent can connect to the embedded Player MCP.", "none");
 
         ctx.Space(10);
         if (ctx.Button("Write Runtime Extension Config")) {
@@ -140,11 +138,6 @@
         if (ctx.Button("Refresh")) {
             ctx.Repaint();
         }
-        ctx.BeginDisabled(!snap.editorRunning);
-        if (ctx.Button("Scan LAN")) {
-            ctx.ScanLanTargets();
-        }
-        ctx.EndDisabled();
         ctx.EndHorizontal();
 
         ctx.Space(10);
@@ -170,7 +163,6 @@
             ctx.Label("Kind: " + stringOf(target.kind));
             ctx.Label("Source: " + stringOf(target.source || "(unknown)"));
             ctx.Label("ID: " + stringOf(target.id));
-            ctx.Label("Group: " + stringOf(target.group));
             ctx.Label("Platform: " + stringOf(target.platform));
             ctx.Label("URL:");
             ctx.SelectableLabel(target.url || "(through local Editor MCP)");

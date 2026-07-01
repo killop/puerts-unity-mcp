@@ -1,12 +1,14 @@
 using System;
 using System.IO;
 using System.Text;
+using System.Threading;
 
 namespace PuertsUnityMcp
 {
     public static class AtomicFile
     {
         private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
+        private static readonly TimeSpan StaleTempRetention = TimeSpan.FromMinutes(1);
 
         public static void WriteAllText(string path, string text)
         {
@@ -16,15 +18,42 @@ namespace PuertsUnityMcp
                 Directory.CreateDirectory(directory);
             }
 
+            CleanupStaleTempFiles(path, null);
             var tempPath = path + ".tmp." + Guid.NewGuid().ToString("N");
             File.WriteAllText(tempPath, text ?? string.Empty, Utf8NoBom);
 
-            if (File.Exists(path))
+            Exception lastException = null;
+            for (var attempt = 0; attempt < 8; attempt++)
             {
-                File.Delete(path);
+                try
+                {
+                    if (File.Exists(path))
+                    {
+                        TryReplaceExistingFile(tempPath, path);
+                    }
+                    else
+                    {
+                        File.Move(tempPath, path);
+                    }
+
+                    CleanupStaleTempFiles(path, tempPath);
+                    return;
+                }
+                catch (IOException ex)
+                {
+                    lastException = ex;
+                }
+                catch (UnauthorizedAccessException ex)
+                {
+                    lastException = ex;
+                }
+
+                Thread.Sleep(25 * (attempt + 1));
             }
 
-            File.Move(tempPath, path);
+            TryDeleteTempFile(tempPath);
+            CleanupStaleTempFiles(path, tempPath);
+            throw lastException ?? new IOException("Failed to write file: " + path);
         }
 
         public static void WriteJson<T>(string path, T value, bool pretty = true)
@@ -100,6 +129,73 @@ namespace PuertsUnityMcp
             }
 
             return content[0] == '\ufeff' ? content.Substring(1) : content;
+        }
+
+        private static void TryReplaceExistingFile(string tempPath, string path)
+        {
+            try
+            {
+                File.Replace(tempPath, path, null, true);
+                return;
+            }
+            catch (PlatformNotSupportedException)
+            {
+            }
+            catch (FileNotFoundException)
+            {
+                File.Move(tempPath, path);
+                return;
+            }
+
+            File.Delete(path);
+            File.Move(tempPath, path);
+        }
+
+        private static void TryDeleteTempFile(string tempPath)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(tempPath) && File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private static void CleanupStaleTempFiles(string path, string currentTempPath)
+        {
+            try
+            {
+                var directory = Path.GetDirectoryName(path);
+                var fileName = Path.GetFileName(path);
+                if (string.IsNullOrEmpty(directory) || string.IsNullOrEmpty(fileName) || !Directory.Exists(directory))
+                {
+                    return;
+                }
+
+                var currentFullPath = string.IsNullOrEmpty(currentTempPath) ? string.Empty : Path.GetFullPath(currentTempPath);
+                foreach (var tempPath in Directory.GetFiles(directory, fileName + ".tmp.*", SearchOption.TopDirectoryOnly))
+                {
+                    if (!string.IsNullOrEmpty(currentFullPath)
+                        && string.Equals(Path.GetFullPath(tempPath), currentFullPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    if (DateTime.UtcNow - File.GetLastWriteTimeUtc(tempPath) < StaleTempRetention)
+                    {
+                        continue;
+                    }
+
+                    TryDeleteTempFile(tempPath);
+                }
+            }
+            catch
+            {
+            }
         }
     }
 }

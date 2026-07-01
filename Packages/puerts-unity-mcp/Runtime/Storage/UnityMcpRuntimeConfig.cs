@@ -9,18 +9,16 @@ namespace PuertsUnityMcp
     [Serializable]
     public sealed class UnityMcpRuntimeConfig
     {
-        public const int LatestVersion = 4;
+        public const int LatestVersion = 5;
 
         public int version = LatestVersion;
-        public string _comment_runtimeLanDirect = "Store the phone/player config at puerts-unity-mcp-extension/mobile-mcp-config.json. Run node Tools~/add-pum-to-build.mjs to copy it into StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json and include PuerTS Unity MCP in player builds. Keep runtimeBindAddress as 0.0.0.0 and match name_group with the PC agent config for LAN direct MCP.";
-        public string _comment_runtimeIo = "Runtime MCP uses HTTP and LAN discovery by default. Disk heartbeat, discovered endpoint cache, file command pump, file screenshots, and AOT miss logs are opt-in to keep phone IO low.";
+        public string _comment_runtimeLanDirect = "Store the phone/player config at puerts-unity-mcp-extension/mobile-mcp-config.json. Run node Tools~/add-pum-to-build.mjs to copy it into StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json and include PuerTS Unity MCP in player builds. Keep runtimeBindAddress as 0.0.0.0 so the PC agent can connect by explicit URL.";
+        public string _comment_runtimeIo = "Runtime MCP uses HTTP only. Disk heartbeat, file command pump, file screenshots, and AOT miss logs are opt-in to keep phone IO low.";
         public bool runtimeAutoStart = true;
         public string runtimeBindAddress = "0.0.0.0";
         public int runtimePort = UnityMcpConstants.DefaultPlayerPort;
         public int runtimeLogBufferSize = 500;
-        public bool lanDiscoveryEnabled = true;
         public string name = "";
-        public string name_group = "default";
         public bool allowJsEval = true;
         public bool allowReflection = true;
         public bool allowPrivateReflection = true;
@@ -32,7 +30,6 @@ namespace PuertsUnityMcp
         public bool runInBackground = true;
         public bool enableFileCommandPump = false;
         public bool enableDiskHeartbeat = false;
-        public bool enableDiscoveredEndpointCache = false;
         public bool enableAotMissLog = false;
         public string screenshotWriteMode = "memory";
         public int heartbeatIntervalMs = 30000;
@@ -49,32 +46,25 @@ namespace PuertsUnityMcp
             return new UnityMcpRuntimeConfig
             {
                 version = LatestVersion,
-                _comment_runtimeLanDirect = "Store the phone/player config at puerts-unity-mcp-extension/mobile-mcp-config.json. Run node Tools~/add-pum-to-build.mjs to copy it into StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json and include PuerTS Unity MCP in player builds. Keep runtimeBindAddress as 0.0.0.0 and match name_group with the PC agent config for LAN direct MCP.",
-                _comment_runtimeIo = "Runtime MCP uses HTTP and LAN discovery by default. Disk heartbeat, discovered endpoint cache, file command pump, file screenshots, and AOT miss logs are opt-in to keep phone IO low.",
+                _comment_runtimeLanDirect = "Store the phone/player config at puerts-unity-mcp-extension/mobile-mcp-config.json. Run node Tools~/add-pum-to-build.mjs to copy it into StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json and include PuerTS Unity MCP in player builds. Keep runtimeBindAddress as 0.0.0.0 so the PC agent can connect by explicit URL.",
+                _comment_runtimeIo = "Runtime MCP uses HTTP only. Disk heartbeat, file command pump, file screenshots, and AOT miss logs are opt-in to keep phone IO low.",
                 runtimeAutoStart = projectConfig.runtimeAutoStart,
                 runtimeBindAddress = projectConfig.runtimeBindAddress,
                 runtimePort = projectConfig.runtimePort,
                 runtimeLogBufferSize = projectConfig.runtimeLogBufferSize,
-                lanDiscoveryEnabled = projectConfig.lanDiscoveryEnabled,
-                name = projectConfig.name,
-                name_group = projectConfig.name_group
+                name = projectConfig.name
             };
         }
 
         public void Normalize()
         {
             version = LatestVersion;
-            _comment_runtimeLanDirect = string.IsNullOrEmpty(_comment_runtimeLanDirect)
-                ? "Store the phone/player config at puerts-unity-mcp-extension/mobile-mcp-config.json. Run node Tools~/add-pum-to-build.mjs to copy it into StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json and include PuerTS Unity MCP in player builds. Keep runtimeBindAddress as 0.0.0.0 and match name_group with the PC agent config for LAN direct MCP."
-                : _comment_runtimeLanDirect;
-            _comment_runtimeIo = string.IsNullOrEmpty(_comment_runtimeIo)
-                ? "Runtime MCP uses HTTP and LAN discovery by default. Disk heartbeat, discovered endpoint cache, file command pump, file screenshots, and AOT miss logs are opt-in to keep phone IO low."
-                : _comment_runtimeIo;
+            _comment_runtimeLanDirect = "Store the phone/player config at puerts-unity-mcp-extension/mobile-mcp-config.json. Run node Tools~/add-pum-to-build.mjs to copy it into StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json and include PuerTS Unity MCP in player builds. Keep runtimeBindAddress as 0.0.0.0 so the PC agent can connect by explicit URL.";
+            _comment_runtimeIo = "Runtime MCP uses HTTP only. Disk heartbeat, file command pump, file screenshots, and AOT miss logs are opt-in to keep phone IO low.";
             runtimeBindAddress = string.IsNullOrEmpty(runtimeBindAddress) ? "0.0.0.0" : runtimeBindAddress;
             runtimePort = runtimePort <= 0 ? UnityMcpConstants.DefaultPlayerPort : runtimePort;
             runtimeLogBufferSize = runtimeLogBufferSize <= 0 ? 500 : runtimeLogBufferSize;
             name = name ?? string.Empty;
-            name_group = string.IsNullOrEmpty(name_group) ? "default" : name_group.Trim();
             maxCommandsPerFrame = maxCommandsPerFrame <= 0 ? 4 : maxCommandsPerFrame;
             targetId = targetId ?? string.Empty;
             screenshotWriteMode = NormalizeScreenshotWriteMode(screenshotWriteMode);

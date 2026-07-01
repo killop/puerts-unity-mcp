@@ -309,6 +309,11 @@ namespace PuertsUnityMcp
             return Path.Combine(StateRoot, UnityMcpConstants.LogsDirectoryName);
         }
 
+        public static string PerformanceReportsRoot()
+        {
+            return Path.Combine(StateRoot, UnityMcpConstants.PerformanceReportsDirectoryName);
+        }
+
         public static string SanitizeId(string value)
         {
             if (string.IsNullOrEmpty(value))

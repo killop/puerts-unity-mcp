@@ -397,7 +397,6 @@ namespace PuertsUnityMcp.Editor
                     kind = ResolveSelectedTargetKind(target),
                     id = target == null ? string.Empty : target.endpointId ?? string.Empty,
                     name = BuildTargetDisplayName(target),
-                    group = target == null ? string.Empty : target.name_group ?? string.Empty,
                     source = target == null ? string.Empty : target.source ?? string.Empty,
                     platform = target == null ? string.Empty : target.platform ?? string.Empty,
                     url = target == null ? string.Empty : target.httpUrl ?? string.Empty
@@ -619,9 +618,6 @@ namespace PuertsUnityMcp.Editor
                 case "name":
                     config.name = value ?? string.Empty;
                     break;
-                case "name_group":
-                    config.name_group = value ?? string.Empty;
-                    break;
                 case "serverName":
                     config.serverName = value ?? string.Empty;
                     break;
@@ -660,32 +656,9 @@ namespace PuertsUnityMcp.Editor
                 case "runtimeAutoStart":
                     config.runtimeAutoStart = value;
                     break;
-                case "lanDiscoveryEnabled":
-                    config.lanDiscoveryEnabled = value;
-                    break;
             }
 
             owner.SaveConfig();
-        }
-
-        public void ScanLanTargets()
-        {
-            var endpoint = UnityMcpEditorBootstrap.Endpoint;
-            if (endpoint == null || !endpoint.IsRunning)
-            {
-                owner.SetMessage("Editor MCP is not running.");
-                return;
-            }
-
-            try
-            {
-                endpoint.CallToolAsync("lan.discovery.scan", new UnityMcpToolArguments()).GetAwaiter().GetResult();
-                owner.SetMessage("LAN discovery scan sent.");
-            }
-            catch (Exception ex)
-            {
-                owner.SetMessage("Scan failed: " + ex.Message);
-            }
         }
 
         public void SelectTarget(int index)
@@ -889,7 +862,6 @@ namespace PuertsUnityMcp.Editor
         public string kind;
         public string id;
         public string name;
-        public string group;
         public string source;
         public string platform;
         public string url;

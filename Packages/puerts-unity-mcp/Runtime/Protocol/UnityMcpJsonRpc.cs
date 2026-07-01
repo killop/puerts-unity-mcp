@@ -14,7 +14,9 @@ namespace PuertsUnityMcp
             "Use runtime.js.eval for Play Mode, Android, iOS, or standalone Player automation; pass targetId/httpUrl when targeting a remote phone/player. " +
             "Write PuerTS JavaScript with CS.UnityEngine/CS.UnityEditor first, return only JSON-serializable values, and do not return Unity objects directly. " +
             "If a wrapped C# type or member is unavailable, use __unity_mcp.typeExists/getStatic/getStaticPath/setStatic/invokeStatic as the reflection fallback. " +
+            "For Editor scene/window context, use editor.hierarchy.get or get-hierarchy to export hierarchy JSON, editor.window.screenshot or screenshot to capture EditorWindow PNGs, and editor.window.focus or focus-window to bring Unity forward. " +
             "For phone UI automation, observe before acting with screen.screenshot, runtime.ui.snapshot, runtime.ui.find, and runtime.ui.raycast, then click with runtime.ui.click or input.tap. " +
+            "For performance hotspot diagnosis, use the Editor MCP Profiler tools: editor.profiler.targets.list, editor.profiler.connect when needed, then editor.profiler.capture or performance.hotspot.report. These record through the Unity Editor Profiler, can analyze Editor or attached phone/player Profiler data, and write JSON/CSV/Markdown reports under .puerts-unity-mcp/perf-reports. " +
             "Move stable project-specific flows into puerts-unity-mcp-extension/Editor/editor-tools or puerts-unity-mcp-extension/Runtime/runtime-tools instead of repeatedly generating one-off eval scripts.";
 
         private readonly IUnityMcpEndpoint endpoint;

@@ -111,7 +111,7 @@ namespace PuertsUnityMcp.Editor
         {
             EditorGUILayout.LabelField("PuerTS Unity MCP", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Configure the Unity Editor MCP endpoint, Play Mode/runtime endpoint, LAN discovery, and project-local runtime assets.",
+                "Configure the Unity Editor MCP endpoint, Play Mode/runtime endpoint, direct remote target URL, and project-local runtime assets.",
                 MessageType.Info);
         }
 
@@ -181,16 +181,14 @@ namespace PuertsUnityMcp.Editor
             config.editorBindAddress = EditorGUILayout.TextField("Bind Address", config.editorBindAddress);
             config.editorPort = EditorGUILayout.IntField("Port", config.editorPort);
             EditorGUILayout.HelpBox(
-                "Use 127.0.0.1 for local-only access. Use 0.0.0.0 if another computer should connect to this Editor MCP; otherwise discovery can find the Editor but remote HTTP connections may still fail.",
+                "Use 127.0.0.1 for local-only access. Use 0.0.0.0 if another computer should connect to this Editor MCP by explicit URL.",
                 MessageType.None);
 
             EditorGUILayout.Space(10f);
-            EditorGUILayout.LabelField("LAN Discovery", EditorStyles.boldLabel);
-            config.lanDiscoveryEnabled = EditorGUILayout.Toggle("Enabled", config.lanDiscoveryEnabled);
+            EditorGUILayout.LabelField("Identity", EditorStyles.boldLabel);
             config.name = EditorGUILayout.TextField("Name", config.name);
-            config.name_group = EditorGUILayout.TextField("Name Group", config.name_group);
             EditorGUILayout.HelpBox(
-                "LAN discovery only accepts endpoints with the same name_group. Runtime Play Mode is kept local; LAN player discovery is intended for real APK/IPA or standalone players. UDP can be blocked by firewalls, AP isolation, VLAN routing, or network policy; configure lanHttpProbeHosts/lanHttpProbeCidrs in editor-mcp-config.json for TCP/HTTP fallback.",
+                "Remote Editor and phone/player connections are explicit only. Set a direct target URL in the Targets tab or pass --target-url / PUERTS_UNITY_MCP_TARGET_URL to the proxy.",
                 MessageType.None);
         }
 
@@ -264,7 +262,7 @@ namespace PuertsUnityMcp.Editor
         {
             EditorGUILayout.LabelField("Target Selection", EditorStyles.boldLabel);
             EditorGUILayout.HelpBox(
-                "Select the preferred MCP target for this PC. Agents can also call targets.list to see the same Editor, Play Mode, and discovered phone/player endpoints.",
+                "Select the preferred MCP target for this PC. Local Editor and Play Mode are listed automatically; remote Editors and phones require an explicit URL.",
                 MessageType.Info);
 
             EditorGUILayout.Space(6f);
@@ -278,13 +276,6 @@ namespace PuertsUnityMcp.Editor
                 Repaint();
             }
 
-            EditorGUI.BeginDisabledGroup(!UnityMcpEditorBootstrap.IsRunning);
-            if (GUILayout.Button("Scan LAN", GUILayout.Height(28f)))
-            {
-                ScanLanTargets();
-            }
-
-            EditorGUI.EndDisabledGroup();
             EditorGUI.BeginDisabledGroup(UnityMcpEditorBootstrap.IsRunning);
             if (GUILayout.Button("Start Editor MCP", GUILayout.Height(28f)))
             {
@@ -304,7 +295,7 @@ namespace PuertsUnityMcp.Editor
             var endpoint = UnityMcpEditorBootstrap.Endpoint;
             if (endpoint == null || !endpoint.IsRunning)
             {
-                EditorGUILayout.HelpBox("Start the Editor MCP to list targets and run LAN discovery.", MessageType.Warning);
+                EditorGUILayout.HelpBox("Start the Editor MCP to list local targets.", MessageType.Warning);
                 return;
             }
 
@@ -327,10 +318,13 @@ namespace PuertsUnityMcp.Editor
         private void DrawSelectedTarget()
         {
             EditorGUILayout.LabelField("Selected", EditorStyles.boldLabel);
-            EditorGUILayout.LabelField("Kind", string.IsNullOrEmpty(config.selectedTargetKind) ? "editor" : config.selectedTargetKind);
-            EditorGUILayout.LabelField("ID", string.IsNullOrEmpty(config.selectedTargetId) ? "(not selected)" : config.selectedTargetId);
-            EditorGUILayout.LabelField("Name", string.IsNullOrEmpty(config.selectedTargetName) ? "(not selected)" : config.selectedTargetName);
-            EditorGUILayout.LabelField("URL", string.IsNullOrEmpty(config.selectedTargetUrl) ? "(through local Editor MCP)" : config.selectedTargetUrl);
+            config.selectedTargetKind = EditorGUILayout.TextField("Kind", string.IsNullOrEmpty(config.selectedTargetKind) ? "editor" : config.selectedTargetKind);
+            config.selectedTargetId = EditorGUILayout.TextField("ID", config.selectedTargetId ?? string.Empty);
+            config.selectedTargetName = EditorGUILayout.TextField("Name", config.selectedTargetName ?? string.Empty);
+            config.selectedTargetUrl = EditorGUILayout.TextField("Direct URL", config.selectedTargetUrl ?? string.Empty);
+            EditorGUILayout.HelpBox(
+                "Use kind=editor with http://PC_IP:18990 for a remote Unity Editor, or kind=player with http://PHONE_IP:18991 for a phone/player. Empty URL means the proxy connects to the local Editor MCP.",
+                MessageType.None);
         }
 
         private void DrawTargetRow(UnityMcpHeartbeat target)
@@ -357,7 +351,6 @@ namespace PuertsUnityMcp.Editor
             DrawTargetInfo("Kind", ResolveSelectedTargetKind(target));
             DrawTargetInfo("Source", string.IsNullOrEmpty(target.source) ? "(unknown)" : target.source);
             DrawTargetInfo("ID", target.endpointId);
-            DrawTargetInfo("Group", target.name_group);
             DrawTargetInfo("Platform", target.platform);
             DrawTargetInfo("URL", string.IsNullOrEmpty(target.httpUrl) ? "(through local Editor MCP)" : target.httpUrl);
             EditorGUILayout.EndVertical();
@@ -404,28 +397,6 @@ namespace PuertsUnityMcp.Editor
 
             EditorGUI.EndDisabledGroup();
             EditorGUILayout.EndHorizontal();
-        }
-
-        private void ScanLanTargets()
-        {
-            var endpoint = UnityMcpEditorBootstrap.Endpoint;
-            if (endpoint == null || !endpoint.IsRunning)
-            {
-                targetMessage = "Editor MCP is not running.";
-                return;
-            }
-
-            try
-            {
-                endpoint.CallToolAsync("lan.discovery.scan", new UnityMcpToolArguments()).GetAwaiter().GetResult();
-                targetMessage = "LAN discovery scan sent. Matching name_group endpoints will appear after their heartbeat arrives.";
-            }
-            catch (Exception ex)
-            {
-                targetMessage = "Scan failed: " + ex.Message;
-            }
-
-            Repaint();
         }
 
         private void SelectTarget(UnityMcpHeartbeat target)

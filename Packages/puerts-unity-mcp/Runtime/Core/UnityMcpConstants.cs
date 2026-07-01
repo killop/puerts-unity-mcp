@@ -20,6 +20,7 @@ namespace PuertsUnityMcp
         public const string TempDirectoryName = "temp";
         public const string ToolsDirectoryName = "tools";
         public const string LogsDirectoryName = "logs";
+        public const string PerformanceReportsDirectoryName = "perf-reports";
         public const string EditorsDirectoryName = "editors";
         public const string PlayersDirectoryName = "players";
         public const string CommandsDirectoryName = "commands";
@@ -32,10 +33,6 @@ namespace PuertsUnityMcp
         public const string RuntimeConfigFileName = "mobile-mcp-config.json";
         public const string LegacyConfigFileName = "config.json";
         public const string LegacyRuntimeConfigFileName = "runtime-config.json";
-        public const string DiscoveryProtocol = "puerts-unity-mcp.discovery.v1";
-        public const string DiscoverySource = "lan";
-        public const int DiscoveryPort = 18992;
-        public const int DiscoveryIntervalMs = 2000;
         public const string DomainReloadEventsFileName = "domainreload-events.jsonl";
         public const string DomainReloadLockName = "domainreload.lock";
         public const string CompilingLockName = "compiling.lock";
@@ -55,5 +52,20 @@ namespace PuertsUnityMcp
         public static readonly TimeSpan CommandResultRetention = TimeSpan.FromMinutes(StaleFileMinutes);
         public static readonly TimeSpan OperationResultRetention = TimeSpan.FromMinutes(StaleFileMinutes);
         public static readonly TimeSpan InProgressOperationRetention = TimeSpan.FromMinutes(InProgressOperationRetentionMinutes);
+
+        public static string ResolveEndpointName(string configuredName, string fallbackName, string fallbackId)
+        {
+            if (!string.IsNullOrEmpty(configuredName))
+            {
+                return configuredName.Trim();
+            }
+
+            if (!string.IsNullOrEmpty(fallbackName))
+            {
+                return fallbackName.Trim();
+            }
+
+            return string.IsNullOrEmpty(fallbackId) ? "unity-mcp" : fallbackId.Trim();
+        }
     }
 }

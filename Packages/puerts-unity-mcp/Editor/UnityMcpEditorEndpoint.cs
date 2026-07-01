@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
-using System.Net.NetworkInformation;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -11,12 +10,8 @@ using UnityEngine;
 
 namespace PuertsUnityMcp.Editor
 {
-    internal sealed class UnityMcpEditorEndpoint : IUnityMcpEndpoint, IDisposable
+    internal sealed partial class UnityMcpEditorEndpoint : IUnityMcpEndpoint, IDisposable
     {
-        private const int MaxPlayerHeartbeatDirectories = 64;
-        private const int LanHttpProbeBatchSize = 64;
-        private const int DefaultLanHttpProbeTimeoutMs = 1000;
-        private static DateTime lastPlayerHeartbeatCleanupUtc;
         private readonly UnityMcpToolRegistry tools = new UnityMcpToolRegistry();
         private readonly OperationStore operations = new OperationStore();
         private PuertsScriptHost editorScriptHost;
@@ -25,11 +20,9 @@ namespace PuertsUnityMcp.Editor
         private const string StartupSceneToolScript = "Editor/JavaScriptTools/editor-build-settings-startup-scene.mjs";
         private UnityMcpHttpServer httpServer;
         private CommandFilePump commandPump;
-        private UnityMcpLanDiscoveryService discoveryService;
         private DateTime startedAtUtc;
         private DateTime lastHeartbeatUtc;
-        private string discoveryName;
-        private string discoveryGroup;
+        private string endpointDisplayName;
 
         public UnityMcpEditorEndpoint()
         {
@@ -76,8 +69,8 @@ namespace PuertsUnityMcp.Editor
                         UnityMcpProjectConfigStore.Save(config);
                     }
 
+                    endpointDisplayName = UnityMcpConstants.ResolveEndpointName(config.name, EndpointName, EndpointId);
                     WriteHeartbeat();
-                    StartDiscovery(config);
                     return;
                 }
                 catch (Exception ex)
@@ -93,8 +86,6 @@ namespace PuertsUnityMcp.Editor
 
         public void Stop()
         {
-            discoveryService?.Dispose();
-            discoveryService = null;
             httpServer?.Dispose();
             httpServer = null;
         }
@@ -110,7 +101,6 @@ namespace PuertsUnityMcp.Editor
         {
             editorScriptHost.Tick();
             commandPump?.Tick(4);
-            discoveryService?.Tick();
 
             if ((DateTime.UtcNow - lastHeartbeatUtc).TotalMilliseconds >= UnityMcpConstants.HeartbeatIntervalMs)
             {
@@ -221,44 +211,14 @@ namespace PuertsUnityMcp.Editor
                 }));
             }));
 
-            tools.Register(new DelegateUnityMcpTool("runtime.targets.list", "List local Play Mode and discovered Player MCP targets.", JsonSchemas.Object(), (ctx, args) =>
+            tools.Register(new DelegateUnityMcpTool("runtime.targets.list", "List local Play Mode runtime and the configured direct Player target, if selectedTargetUrl is set.", JsonSchemas.Object(), (ctx, args) =>
                 Task.FromResult(UnityJson.ToJson(ListRuntimeTargets()))));
 
-            tools.Register(new DelegateUnityMcpTool("targets.list", "List local Editor, local Play Mode runtime, discovered LAN Editors, and discovered real Player targets.", JsonSchemas.Object(), (ctx, args) =>
+            tools.Register(new DelegateUnityMcpTool("targets.list", "List local Editor, local Play Mode runtime, and configured direct remote targets.", JsonSchemas.Object(), (ctx, args) =>
                 Task.FromResult(UnityJson.ToJson(ListAllTargets()))));
 
-            tools.Register(new DelegateUnityMcpTool("editor.targets.list", "List this Editor and discovered LAN Editor MCP targets in the same name_group.", JsonSchemas.Object(), (ctx, args) =>
+            tools.Register(new DelegateUnityMcpTool("editor.targets.list", "List this Editor MCP endpoint and the configured direct remote Editor target, if selectedTargetUrl is set.", JsonSchemas.Object(), (ctx, args) =>
                 Task.FromResult(UnityJson.ToJson(ListEditorTargets()))));
-
-            tools.Register(new DelegateUnityMcpTool("lan.discovery.scan", "Broadcast a LAN discovery query and probe configured LAN Player MCP HTTP ranges in the same name_group.", JsonSchemas.Object(
-                JsonSchemas.StringProperty("probeHosts", "Optional comma-separated host IPs to probe on the default player MCP port."),
-                JsonSchemas.StringProperty("probeCidrs", "Optional comma-separated CIDRs to probe, for example 192.168.1.0/24."),
-                JsonSchemas.NumberProperty("probeTimeoutMs", "Optional per-host HTTP probe timeout in milliseconds. Defaults to editor-mcp-config.json lanHttpProbeTimeoutMs or 1000.")), async (ctx, args) =>
-            {
-                discoveryService?.SendQuery();
-                var config = UnityMcpProjectConfigStore.LoadOrCreate();
-                var candidates = BuildLanHttpProbeUrls(config, args);
-                var timeoutMs = ResolveLanHttpProbeTimeoutMs(config, args);
-                var probeStats = await ProbeLanPlayerTargetsAsync(candidates, timeoutMs);
-                return UnityJson.ToJson(new DiscoveryScanResult
-                {
-                    enabled = discoveryService != null && discoveryService.IsRunning,
-                    name = discoveryName,
-                    name_group = discoveryGroup,
-                    port = UnityMcpConstants.DiscoveryPort,
-                    httpProbeEnabled = true,
-                    httpProbeCandidates = probeStats.candidates,
-                    httpProbeTimeoutMs = probeStats.timeoutMs,
-                    httpProbeTcpReachable = probeStats.tcpReachable,
-                    httpProbeHealthOk = probeStats.healthOk,
-                    httpProbeFound = probeStats.accepted,
-                    httpProbeRejected = probeStats.rejected,
-                    httpProbeTimeoutOrError = probeStats.timeoutOrError,
-                    httpProbeFirstReachableUrl = probeStats.firstReachableUrl,
-                    httpProbeFirstRejectedReason = probeStats.firstRejectedReason,
-                    httpProbeHint = BuildLanHttpProbeHint(probeStats)
-                });
-            }));
 
             tools.Register(new DelegateUnityMcpTool("runtime.js.eval", "Execute PuerTS JavaScript in local Play Mode or a remote Player/phone target. Use runtime-safe CS.UnityEngine APIs when wrapped; use __unity_mcp.invokeStatic(type, method, ...args), getStatic, getStaticPath, setStatic, or typeExists as reflection fallback. Return JSON-serializable data.", JsonSchemas.Object(
                 JsonSchemas.StringProperty("targetId"),
@@ -316,6 +276,8 @@ namespace PuertsUnityMcp.Editor
                 JsonSchemas.StringProperty("operationId")), (ctx, args) =>
                 Task.FromResult(operations.Read(args.operationId))));
 
+            RegisterEditorSceneAndWindowTools();
+            RegisterPerformanceTools();
             RegisterEditorResourceScriptTools();
         }
 
@@ -422,7 +384,6 @@ namespace PuertsUnityMcp.Editor
                 endpointKind = EndpointKind,
                 endpointId = EndpointId,
                 endpointName = EndpointName,
-                name_group = UnityMcpLanDiscoveryService.NormalizeGroup(discoveryGroup),
                 projectRoot = UnityMcpPaths.ProjectRoot,
                 stateRoot = UnityMcpPaths.StateRoot,
                 httpUrl = httpServer == null ? null : httpServer.Url,
@@ -479,12 +440,26 @@ namespace PuertsUnityMcp.Editor
                 }
             }
 
+            var compileResultPath = Path.Combine(UnityMcpPaths.CompileResultsRoot(), requestId + ".json");
+            if (!EditorApplication.isCompiling && !File.Exists(compileResultPath))
+            {
+                AtomicFile.WriteJson(compileResultPath, new CompileResultRecord
+                {
+                    requestId = requestId,
+                    success = true,
+                    completedAtUtc = DateTime.UtcNow.ToString("o"),
+                    compilerMessages = new CompileMessageRecord[0]
+                });
+                UnityMcpEditorSettings.ActiveCompileRequestId = string.Empty;
+                UnityMcpEditorLocks.DeleteCompilingLock();
+            }
+
             var result = new CompileRequestResult
             {
                 operationId = operationId,
                 requestId = requestId,
                 isCompiling = EditorApplication.isCompiling,
-                compileResultPath = Path.Combine(UnityMcpPaths.CompileResultsRoot(), requestId + ".json")
+                compileResultPath = compileResultPath
             };
             var resultJson = UnityJson.ToJson(result);
             operations.Complete(operationId, true, resultJson);
@@ -512,8 +487,7 @@ namespace PuertsUnityMcp.Editor
                     endpointName = local.EndpointName,
                     projectRoot = UnityMcpPaths.ProjectRoot,
                     projectName = local.EndpointName,
-                    name = UnityMcpLanDiscoveryService.ResolveName(discoveryName, local.EndpointName, local.EndpointId),
-                    name_group = UnityMcpLanDiscoveryService.NormalizeGroup(discoveryGroup),
+                    name = UnityMcpConstants.ResolveEndpointName(null, local.EndpointName, local.EndpointId),
                     httpUrl = null,
                     port = 0,
                     unityVersion = Application.unityVersion,
@@ -535,32 +509,10 @@ namespace PuertsUnityMcp.Editor
                 });
             }
 
-            var playersRoot = Path.Combine(UnityMcpPaths.StateRoot, UnityMcpConstants.PlayersDirectoryName);
-            if (Directory.Exists(playersRoot))
+            var configured = BuildConfiguredDirectTarget("player");
+            if (configured != null)
             {
-                CleanupPlayerHeartbeatCache(playersRoot);
-                foreach (var heartbeatPath in Directory.GetFiles(playersRoot, UnityMcpConstants.HeartbeatFileName, SearchOption.AllDirectories))
-                {
-                    if (AtomicFile.TryReadJson<UnityMcpHeartbeat>(heartbeatPath, out var heartbeat) && heartbeat != null)
-                    {
-                        if (!ShouldIncludePlayerHeartbeat(heartbeat))
-                        {
-                            continue;
-                        }
-
-                        if (heartbeat.isEditor)
-                        {
-                            continue;
-                        }
-
-                        if (local != null && string.Equals(heartbeat.endpointId, local.EndpointId, StringComparison.Ordinal))
-                        {
-                            continue;
-                        }
-
-                        targets.Add(heartbeat);
-                    }
-                }
+                targets.Add(configured);
             }
 
             return new UnityMcpTargetList { targets = targets.ToArray() };
@@ -573,28 +525,10 @@ namespace PuertsUnityMcp.Editor
                 BuildEditorHeartbeat()
             };
 
-            var editorsRoot = Path.Combine(UnityMcpPaths.StateRoot, UnityMcpConstants.EditorsDirectoryName);
-            if (Directory.Exists(editorsRoot))
+            var configured = BuildConfiguredDirectTarget("editor");
+            if (configured != null && !string.Equals(configured.endpointId, EndpointId, StringComparison.Ordinal))
             {
-                foreach (var heartbeatPath in Directory.GetFiles(editorsRoot, UnityMcpConstants.HeartbeatFileName, SearchOption.AllDirectories))
-                {
-                    if (!AtomicFile.TryReadJson<UnityMcpHeartbeat>(heartbeatPath, out var heartbeat) || heartbeat == null)
-                    {
-                        continue;
-                    }
-
-                    if (string.Equals(heartbeat.endpointId, EndpointId, StringComparison.Ordinal))
-                    {
-                        continue;
-                    }
-
-                    if (!ShouldIncludeDiscoveredHeartbeat(heartbeat))
-                    {
-                        continue;
-                    }
-
-                    targets.Add(heartbeat);
-                }
+                targets.Add(configured);
             }
 
             return new UnityMcpTargetList { targets = targets.ToArray() };
@@ -635,10 +569,10 @@ namespace PuertsUnityMcp.Editor
 
         private async Task<string> CallRemotePlayerTool(string targetId, string httpUrlOverride, string toolName, UnityMcpToolArguments arguments)
         {
-            var heartbeat = FindPlayerHeartbeat(targetId);
+            var heartbeat = FindConfiguredDirectTarget(targetId, "player");
             if (heartbeat == null && string.IsNullOrEmpty(httpUrlOverride))
             {
-                throw new InvalidOperationException("Player target not found: " + targetId);
+                throw new InvalidOperationException("Remote Player target requires an explicit httpUrl or selectedTargetUrl in editor-mcp-config.json.");
             }
 
             var httpUrl = string.IsNullOrEmpty(httpUrlOverride) ? heartbeat.httpUrl : httpUrlOverride;
@@ -684,39 +618,93 @@ namespace PuertsUnityMcp.Editor
                 + ",\"arguments\":" + argumentsJson + "}}";
         }
 
-        private UnityMcpHeartbeat FindPlayerHeartbeat(string targetId)
+        private UnityMcpHeartbeat FindConfiguredDirectTarget(string targetId, string endpointKind)
         {
-            if (string.IsNullOrEmpty(targetId))
+            var target = BuildConfiguredDirectTarget(endpointKind);
+            if (target == null)
             {
                 return null;
             }
 
-            var playersRoot = Path.Combine(UnityMcpPaths.StateRoot, UnityMcpConstants.PlayersDirectoryName);
-            if (!Directory.Exists(playersRoot))
+            if (string.IsNullOrEmpty(targetId)
+                || string.Equals(target.endpointId, targetId, StringComparison.Ordinal))
             {
-                return null;
-            }
-
-            CleanupPlayerHeartbeatCache(playersRoot);
-            foreach (var heartbeatPath in Directory.GetFiles(playersRoot, UnityMcpConstants.HeartbeatFileName, SearchOption.AllDirectories))
-            {
-                if (!AtomicFile.TryReadJson<UnityMcpHeartbeat>(heartbeatPath, out var heartbeat) || heartbeat == null)
-                {
-                    continue;
-                }
-
-                if (!ShouldIncludePlayerHeartbeat(heartbeat))
-                {
-                    continue;
-                }
-
-                if (string.Equals(heartbeat.endpointId, targetId, StringComparison.Ordinal))
-                {
-                    return heartbeat;
-                }
+                return target;
             }
 
             return null;
+        }
+
+        private UnityMcpHeartbeat BuildConfiguredDirectTarget(string endpointKind)
+        {
+            var config = UnityMcpProjectConfigStore.Load();
+            if (config == null || string.IsNullOrEmpty(config.selectedTargetUrl))
+            {
+                return null;
+            }
+
+            var selectedKind = string.IsNullOrEmpty(config.selectedTargetKind) ? "editor" : config.selectedTargetKind;
+            if (!string.Equals(selectedKind, endpointKind, StringComparison.OrdinalIgnoreCase))
+            {
+                return null;
+            }
+
+            var endpointId = string.IsNullOrEmpty(config.selectedTargetId)
+                ? UnityMcpPaths.SanitizeId(selectedKind + "_" + config.selectedTargetUrl)
+                : UnityMcpPaths.SanitizeId(config.selectedTargetId);
+            var isEditor = string.Equals(selectedKind, "editor", StringComparison.OrdinalIgnoreCase);
+            return new UnityMcpHeartbeat
+            {
+                endpointId = endpointId,
+                endpointKind = isEditor ? "editor" : "player",
+                endpointName = config.selectedTargetName,
+                projectRoot = string.Empty,
+                projectName = config.selectedTargetName,
+                name = UnityMcpConstants.ResolveEndpointName(config.selectedTargetName, config.name, endpointId),
+                httpUrl = config.selectedTargetUrl.TrimEnd('/'),
+                port = TryGetPort(config.selectedTargetUrl, isEditor ? UnityMcpConstants.DefaultEditorPort : UnityMcpConstants.DefaultPlayerPort),
+                unityVersion = string.Empty,
+                platform = isEditor ? "RemoteEditor" : "RemotePlayer",
+                isEditor = isEditor,
+                lastUpdatedUtc = DateTime.UtcNow.ToString("o"),
+                source = "configured-direct",
+                capabilities = new UnityMcpCapabilities
+                {
+                    editorJsEval = isEditor,
+                    runtimeJsEval = !isEditor,
+                    runtimeToolCall = !isEditor,
+                    reflection = true,
+                    http = true
+                }
+            };
+        }
+
+        private static int TryGetPort(string httpUrl, int fallback)
+        {
+            if (Uri.TryCreate(httpUrl, UriKind.Absolute, out var uri) && uri.Port > 0)
+            {
+                return uri.Port;
+            }
+
+            return fallback;
+        }
+
+        private static bool ContainsString(List<string> values, string value)
+        {
+            if (values == null)
+            {
+                return false;
+            }
+
+            for (var i = 0; i < values.Count; i++)
+            {
+                if (string.Equals(values[i], value, StringComparison.Ordinal))
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private bool IsLocalRuntimeTarget(string targetId)
@@ -730,172 +718,6 @@ namespace PuertsUnityMcp.Editor
             return string.IsNullOrEmpty(targetId)
                 || string.Equals(targetId, "playmode", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(targetId, runtime.EndpointId, StringComparison.Ordinal);
-        }
-
-        private static bool ShouldIncludePlayerHeartbeat(UnityMcpHeartbeat heartbeat)
-        {
-            return ShouldIncludeDiscoveredHeartbeat(heartbeat);
-        }
-
-        private static void CleanupPlayerHeartbeatCache(string playersRoot)
-        {
-            if (string.IsNullOrEmpty(playersRoot) || !Directory.Exists(playersRoot))
-            {
-                return;
-            }
-
-            if ((DateTime.UtcNow - lastPlayerHeartbeatCleanupUtc).TotalSeconds < 30)
-            {
-                return;
-            }
-
-            lastPlayerHeartbeatCleanupUtc = DateTime.UtcNow;
-            var kept = new List<PlayerHeartbeatDirectory>();
-            foreach (var directory in Directory.GetDirectories(playersRoot))
-            {
-                var heartbeatPath = Path.Combine(directory, UnityMcpConstants.HeartbeatFileName);
-                if (!AtomicFile.TryReadJson<UnityMcpHeartbeat>(heartbeatPath, out var heartbeat) || heartbeat == null)
-                {
-                    TryDeleteDirectoryUnder(playersRoot, directory);
-                    continue;
-                }
-
-                if (!string.Equals(heartbeat.source, "manual", StringComparison.OrdinalIgnoreCase)
-                    && !ShouldIncludePlayerHeartbeat(heartbeat))
-                {
-                    TryDeleteDirectoryUnder(playersRoot, directory);
-                    continue;
-                }
-
-                kept.Add(new PlayerHeartbeatDirectory
-                {
-                    directory = directory,
-                    heartbeat = heartbeat,
-                    lastUpdatedUtc = ParseHeartbeatTime(heartbeat.lastUpdatedUtc)
-                });
-            }
-
-            kept.Sort((left, right) => right.lastUpdatedUtc.CompareTo(left.lastUpdatedUtc));
-            var nonManualCount = 0;
-            for (var i = 0; i < kept.Count; i++)
-            {
-                var heartbeat = kept[i].heartbeat;
-                if (heartbeat != null && string.Equals(heartbeat.source, "manual", StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                nonManualCount++;
-                if (nonManualCount > MaxPlayerHeartbeatDirectories)
-                {
-                    TryDeleteDirectoryUnder(playersRoot, kept[i].directory);
-                }
-            }
-        }
-
-        private static DateTime ParseHeartbeatTime(string lastUpdatedUtc)
-        {
-            if (DateTime.TryParse(lastUpdatedUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsed))
-            {
-                return parsed.ToUniversalTime();
-            }
-
-            return DateTime.MinValue;
-        }
-
-        private static void TryDeleteDirectoryUnder(string root, string directory)
-        {
-            try
-            {
-                if (string.IsNullOrEmpty(root) || string.IsNullOrEmpty(directory))
-                {
-                    return;
-                }
-
-                var normalizedRoot = Path.GetFullPath(root)
-                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                    + Path.DirectorySeparatorChar;
-                var normalizedDirectory = Path.GetFullPath(directory)
-                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                    + Path.DirectorySeparatorChar;
-                if (!normalizedDirectory.StartsWith(normalizedRoot, StringComparison.OrdinalIgnoreCase))
-                {
-                    return;
-                }
-
-                Directory.Delete(directory, true);
-            }
-            catch
-            {
-            }
-        }
-
-        private static bool ShouldIncludeDiscoveredHeartbeat(UnityMcpHeartbeat heartbeat)
-        {
-            if (heartbeat == null)
-            {
-                return false;
-            }
-
-            if (!string.Equals(heartbeat.source, "manual", StringComparison.OrdinalIgnoreCase)
-                && IsStaleHeartbeat(heartbeat.lastUpdatedUtc))
-            {
-                return false;
-            }
-
-            if (heartbeat.processId > 0 && IsLoopbackUrl(heartbeat.httpUrl) && !IsProcessAlive(heartbeat.processId))
-            {
-                return false;
-            }
-
-            return true;
-        }
-
-        private static bool IsStaleHeartbeat(string lastUpdatedUtc)
-        {
-            if (string.IsNullOrEmpty(lastUpdatedUtc))
-            {
-                return false;
-            }
-
-            if (!DateTime.TryParse(lastUpdatedUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsed))
-            {
-                return false;
-            }
-
-            return DateTime.UtcNow - parsed.ToUniversalTime() > UnityMcpConstants.CommandResultRetention;
-        }
-
-        private static bool IsLoopbackUrl(string url)
-        {
-            if (string.IsNullOrEmpty(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri))
-            {
-                return false;
-            }
-
-            return string.Equals(uri.Host, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(uri.Host, "localhost", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(uri.Host, "::1", StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static bool IsProcessAlive(int processId)
-        {
-            try
-            {
-                var process = System.Diagnostics.Process.GetProcessById(processId);
-                return process != null && !process.HasExited;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private sealed class PlayerHeartbeatDirectory
-        {
-            public string directory;
-            public UnityMcpHeartbeat heartbeat;
-            public DateTime lastUpdatedUtc;
         }
 
         private void WriteHeartbeat()
@@ -915,8 +737,7 @@ namespace PuertsUnityMcp.Editor
                 endpointName = EndpointName,
                 projectRoot = UnityMcpPaths.ProjectRoot,
                 projectName = EndpointName,
-                name = UnityMcpLanDiscoveryService.ResolveName(discoveryName, EndpointName, EndpointId),
-                name_group = UnityMcpLanDiscoveryService.NormalizeGroup(discoveryGroup),
+                name = UnityMcpConstants.ResolveEndpointName(endpointDisplayName, EndpointName, EndpointId),
                 processId = UnityMcpInstanceRegistry.GetProcessId(),
                 httpUrl = httpServer == null ? null : httpServer.Url,
                 port = Port,
@@ -935,20 +756,6 @@ namespace PuertsUnityMcp.Editor
                     http = IsRunning
                 }
             };
-        }
-
-        private void StartDiscovery(UnityMcpProjectConfig config)
-        {
-            discoveryService?.Dispose();
-            discoveryService = null;
-            discoveryName = UnityMcpLanDiscoveryService.ResolveName(config?.name, EndpointName, EndpointId);
-            discoveryGroup = UnityMcpLanDiscoveryService.NormalizeGroup(config?.name_group);
-            if (config == null || !config.lanDiscoveryEnabled)
-            {
-                return;
-            }
-
-            discoveryService = new UnityMcpLanDiscoveryService(BuildEditorHeartbeat, discoveryGroup, false);
         }
 
         private string BuildMcpUrl()
@@ -973,526 +780,6 @@ namespace PuertsUnityMcp.Editor
             {
                 return await reader.ReadToEndAsync();
             }
-        }
-
-        private async Task<LanHttpProbeStats> ProbeLanPlayerTargetsAsync(List<string> urls, int timeoutMs)
-        {
-            var stats = new LanHttpProbeStats
-            {
-                candidates = urls == null ? 0 : urls.Count,
-                timeoutMs = timeoutMs
-            };
-
-            if (urls == null || urls.Count == 0)
-            {
-                return stats;
-            }
-
-            for (var offset = 0; offset < urls.Count; offset += LanHttpProbeBatchSize)
-            {
-                var batchCount = Math.Min(LanHttpProbeBatchSize, urls.Count - offset);
-                var tasks = new Task<LanHttpProbeResult>[batchCount];
-                for (var i = 0; i < batchCount; i++)
-                {
-                    tasks[i] = TryProbePlayerHealthAsync(urls[offset + i], timeoutMs);
-                }
-
-                var results = await Task.WhenAll(tasks);
-                for (var i = 0; i < results.Length; i++)
-                {
-                    var result = results[i];
-                    if (result == null)
-                    {
-                        continue;
-                    }
-
-                    if (result.tcpReachable)
-                    {
-                        stats.tcpReachable++;
-                        if (string.IsNullOrEmpty(stats.firstReachableUrl))
-                        {
-                            stats.firstReachableUrl = result.healthUrl;
-                        }
-                    }
-
-                    if (result.healthOk)
-                    {
-                        stats.healthOk++;
-                    }
-
-                    if (result.heartbeat != null)
-                    {
-                        AtomicFile.WriteJson(Path.Combine(UnityMcpPaths.PlayerRoot(result.heartbeat.endpointId), UnityMcpConstants.HeartbeatFileName), result.heartbeat);
-                        stats.accepted++;
-                        continue;
-                    }
-
-                    if (IsLanHttpProbeRejection(result.reason))
-                    {
-                        stats.rejected++;
-                        if (string.IsNullOrEmpty(stats.firstRejectedReason))
-                        {
-                            stats.firstRejectedReason = result.reason;
-                        }
-                    }
-                    else
-                    {
-                        stats.timeoutOrError++;
-                    }
-                }
-            }
-
-            if (stats.accepted > 0)
-            {
-                Debug.Log("[UnityMCP] LAN HTTP probe found player endpoints. count=" + stats.accepted + ".");
-            }
-            else
-            {
-                Debug.Log("[UnityMCP] LAN HTTP probe found no matching player endpoints. candidates="
-                    + stats.candidates
-                    + ", tcpReachable=" + stats.tcpReachable
-                    + ", healthOk=" + stats.healthOk
-                    + ", rejected=" + stats.rejected
-                    + ", timeoutOrError=" + stats.timeoutOrError
-                    + ".");
-            }
-
-            return stats;
-        }
-
-        private async Task<LanHttpProbeResult> TryProbePlayerHealthAsync(string healthUrl, int timeoutMs)
-        {
-            var result = new LanHttpProbeResult
-            {
-                healthUrl = healthUrl
-            };
-
-            if (string.IsNullOrEmpty(healthUrl))
-            {
-                result.reason = "empty_url";
-                return result;
-            }
-
-            try
-            {
-                if (!Uri.TryCreate(healthUrl, UriKind.Absolute, out var uri))
-                {
-                    result.reason = "invalid_url";
-                    return result;
-                }
-
-                if (!await CanConnectAsync(uri.Host, uri.Port, timeoutMs))
-                {
-                    result.reason = "connect_failed";
-                    return result;
-                }
-
-                result.tcpReachable = true;
-                var json = await GetJsonWithTimeout(healthUrl, timeoutMs);
-                if (string.IsNullOrEmpty(json))
-                {
-                    result.reason = "health_timeout";
-                    return result;
-                }
-
-                result.healthOk = true;
-
-                UnityMcpHealth health;
-                try
-                {
-                    health = UnityJson.FromJson<UnityMcpHealth>(json);
-                }
-                catch
-                {
-                    result.reason = "invalid_health_json";
-                    return result;
-                }
-
-                if (health == null
-                    || string.IsNullOrEmpty(health.endpointId))
-                {
-                    result.reason = "missing_endpoint";
-                    return result;
-                }
-
-                if (health.isEditor)
-                {
-                    result.reason = "editor_endpoint";
-                    return result;
-                }
-
-                if (string.Equals(health.endpointId, EndpointId, StringComparison.Ordinal))
-                {
-                    result.reason = "self_endpoint";
-                    return result;
-                }
-
-                if (!string.IsNullOrEmpty(health.name_group)
-                    && !string.Equals(UnityMcpLanDiscoveryService.NormalizeGroup(health.name_group), UnityMcpLanDiscoveryService.NormalizeGroup(discoveryGroup), StringComparison.Ordinal))
-                {
-                    result.reason = "name_group_mismatch";
-                    return result;
-                }
-
-                var endpointKind = string.IsNullOrEmpty(health.endpointKind) ? "player" : health.endpointKind;
-                if (string.Equals(endpointKind, "editor", StringComparison.OrdinalIgnoreCase))
-                {
-                    result.reason = "editor_endpoint";
-                    return result;
-                }
-
-                var endpointUrl = healthUrl.EndsWith("/health", StringComparison.OrdinalIgnoreCase)
-                    ? healthUrl.Substring(0, healthUrl.Length - "/health".Length)
-                    : healthUrl.TrimEnd('/');
-                result.heartbeat = new UnityMcpHeartbeat
-                {
-                    endpointId = UnityMcpPaths.SanitizeId(health.endpointId),
-                    endpointKind = endpointKind,
-                    endpointName = health.endpointName,
-                    projectRoot = health.projectRoot,
-                    projectName = health.productName,
-                    name = UnityMcpLanDiscoveryService.ResolveName(health.endpointName, health.productName, health.endpointId),
-                    name_group = UnityMcpLanDiscoveryService.NormalizeGroup(string.IsNullOrEmpty(health.name_group) ? discoveryGroup : health.name_group),
-                    httpUrl = endpointUrl,
-                    port = health.httpPort > 0 ? health.httpPort : UnityMcpConstants.DefaultPlayerPort,
-                    unityVersion = health.unityVersion,
-                    platform = health.platform,
-                    isEditor = false,
-                    lastUpdatedUtc = DateTime.UtcNow.ToString("o"),
-                    capabilities = health.capabilities ?? new UnityMcpCapabilities(),
-                    source = UnityMcpConstants.DiscoverySource
-                };
-                result.reason = "accepted";
-                return result;
-            }
-            catch (Exception ex)
-            {
-                result.reason = "probe_error";
-                result.error = ex.Message;
-                return result;
-            }
-        }
-
-        private static bool IsLanHttpProbeRejection(string reason)
-        {
-            return !string.IsNullOrEmpty(reason)
-                && !string.Equals(reason, "connect_failed", StringComparison.Ordinal)
-                && !string.Equals(reason, "health_timeout", StringComparison.Ordinal)
-                && !string.Equals(reason, "probe_error", StringComparison.Ordinal);
-        }
-
-        private static int ResolveLanHttpProbeTimeoutMs(UnityMcpProjectConfig config, UnityMcpToolArguments args)
-        {
-            var value = args != null && args.probeTimeoutMs > 0
-                ? args.probeTimeoutMs
-                : config != null && config.lanHttpProbeTimeoutMs > 0
-                    ? config.lanHttpProbeTimeoutMs
-                    : DefaultLanHttpProbeTimeoutMs;
-            return Math.Max(100, Math.Min(value, 10000));
-        }
-
-        private static string BuildLanHttpProbeHint(LanHttpProbeStats stats)
-        {
-            if (stats == null)
-            {
-                return string.Empty;
-            }
-
-            if (stats.accepted > 0)
-            {
-                return "LAN HTTP probe found matching Player MCP endpoints.";
-            }
-
-            if (stats.tcpReachable > 0 && stats.healthOk == 0)
-            {
-                return "TCP reached at least one host, but /health did not respond in time. Check mobile MCP startup, port, game main-thread responsiveness, and whether the port belongs to the current MCP server.";
-            }
-
-            if (stats.healthOk > 0 && stats.rejected > 0)
-            {
-                return "HTTP /health responded, but no endpoint matched this name_group or target selector. Check name_group and selected target settings.";
-            }
-
-            return "No TCP/HTTP Player MCP response was found. UDP broadcast/multicast may be blocked by firewall, AP isolation, VLAN routing, or network policy; configure lanHttpProbeHosts/lanHttpProbeCidrs or use a direct target URL.";
-        }
-
-        private static async Task<bool> CanConnectAsync(string host, int port, int timeoutMs)
-        {
-            if (string.IsNullOrEmpty(host) || port <= 0)
-            {
-                return false;
-            }
-
-            var client = new System.Net.Sockets.TcpClient();
-            try
-            {
-                var connectTask = client.ConnectAsync(host, port);
-                var completed = await Task.WhenAny(connectTask, Task.Delay(timeoutMs));
-                if (completed != connectTask)
-                {
-                    return false;
-                }
-
-                await connectTask;
-                return client.Connected;
-            }
-            catch
-            {
-                return false;
-            }
-            finally
-            {
-                try { client.Close(); } catch { }
-            }
-        }
-
-        private static async Task<string> GetJsonWithTimeout(string url, int timeoutMs)
-        {
-            var request = (HttpWebRequest)WebRequest.Create(url);
-            request.Method = "GET";
-            request.Timeout = timeoutMs;
-            request.ReadWriteTimeout = timeoutMs;
-
-            try
-            {
-                var responseTask = request.GetResponseAsync();
-                var completed = await Task.WhenAny(responseTask, Task.Delay(timeoutMs));
-                if (completed != responseTask)
-                {
-                    request.Abort();
-                    return null;
-                }
-
-                using (var response = (HttpWebResponse)await responseTask)
-                {
-                    if (response.StatusCode != HttpStatusCode.OK)
-                    {
-                        return null;
-                    }
-
-                    using (var reader = new StreamReader(response.GetResponseStream(), Encoding.UTF8))
-                    {
-                        return await reader.ReadToEndAsync();
-                    }
-                }
-            }
-            catch
-            {
-                try { request.Abort(); } catch { }
-                return null;
-            }
-        }
-
-        private static List<string> BuildLanHttpProbeUrls(UnityMcpProjectConfig config, UnityMcpToolArguments args)
-        {
-            var hosts = BuildLanHttpProbeHosts();
-            AddProbeHosts(hosts, config == null ? null : config.lanHttpProbeHosts);
-            AddProbeCidrs(hosts, config == null ? null : config.lanHttpProbeCidrs);
-            AddProbeHosts(hosts, SplitProbeList(args == null ? null : args.probeHosts));
-            AddProbeCidrs(hosts, SplitProbeList(args == null ? null : args.probeCidrs));
-            var urls = new List<string>(hosts.Count);
-            for (var i = 0; i < hosts.Count; i++)
-            {
-                urls.Add("http://" + hosts[i] + ":" + UnityMcpConstants.DefaultPlayerPort + "/health");
-            }
-
-            return urls;
-        }
-
-        private static List<string> BuildLanHttpProbeHosts()
-        {
-            var hosts = new List<string>();
-            NetworkInterface[] interfaces;
-            try
-            {
-                interfaces = NetworkInterface.GetAllNetworkInterfaces();
-            }
-            catch
-            {
-                return hosts;
-            }
-
-            for (var i = 0; i < interfaces.Length; i++)
-            {
-                var networkInterface = interfaces[i];
-                if (networkInterface == null || networkInterface.OperationalStatus != OperationalStatus.Up)
-                {
-                    continue;
-                }
-
-                IPInterfaceProperties properties;
-                try
-                {
-                    properties = networkInterface.GetIPProperties();
-                }
-                catch
-                {
-                    continue;
-                }
-
-                var unicastAddresses = properties.UnicastAddresses;
-                for (var j = 0; j < unicastAddresses.Count; j++)
-                {
-                    var unicast = unicastAddresses[j];
-                    if (unicast == null
-                        || unicast.Address == null
-                        || unicast.Address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork
-                        || IPAddress.IsLoopback(unicast.Address))
-                    {
-                        continue;
-                    }
-
-                    AddProbeHostsForClassC(hosts, unicast.Address);
-                }
-            }
-
-            return hosts;
-        }
-
-        private static void AddProbeHosts(List<string> hosts, string[] values)
-        {
-            if (hosts == null || values == null)
-            {
-                return;
-            }
-
-            for (var i = 0; i < values.Length; i++)
-            {
-                var value = values[i];
-                if (string.IsNullOrEmpty(value))
-                {
-                    continue;
-                }
-
-                value = value.Trim();
-                if (IPAddress.TryParse(value, out var address)
-                    && address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork
-                    && !IPAddress.IsLoopback(address)
-                    && !ContainsString(hosts, value))
-                {
-                    hosts.Add(value);
-                }
-            }
-        }
-
-        private static void AddProbeCidrs(List<string> hosts, string[] values)
-        {
-            if (hosts == null || values == null)
-            {
-                return;
-            }
-
-            for (var i = 0; i < values.Length; i++)
-            {
-                AddProbeHostsForCidr(hosts, values[i]);
-            }
-        }
-
-        private static string[] SplitProbeList(string value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return new string[0];
-            }
-
-            return value.Split(new[] { ',', ';', '\n', '\r', '\t', ' ' }, StringSplitOptions.RemoveEmptyEntries);
-        }
-
-        private static void AddProbeHostsForClassC(List<string> hosts, IPAddress localAddress)
-        {
-            var bytes = localAddress.GetAddressBytes();
-            if (bytes.Length != 4)
-            {
-                return;
-            }
-
-            for (var host = 1; host <= 254; host++)
-            {
-                if (host == bytes[3])
-                {
-                    continue;
-                }
-
-                var candidate = bytes[0] + "." + bytes[1] + "." + bytes[2] + "." + host;
-                if (!ContainsString(hosts, candidate))
-                {
-                    hosts.Add(candidate);
-                }
-            }
-        }
-
-        private static void AddProbeHostsForCidr(List<string> hosts, string cidr)
-        {
-            if (hosts == null || string.IsNullOrEmpty(cidr))
-            {
-                return;
-            }
-
-            var parts = cidr.Trim().Split('/');
-            if (parts.Length != 2
-                || !IPAddress.TryParse(parts[0], out var address)
-                || address.AddressFamily != System.Net.Sockets.AddressFamily.InterNetwork
-                || !int.TryParse(parts[1], out var prefixLength)
-                || prefixLength < 0
-                || prefixLength > 32)
-            {
-                return;
-            }
-
-            var addressValue = ToUInt32(address);
-            var mask = prefixLength == 0 ? 0u : uint.MaxValue << (32 - prefixLength);
-            var network = addressValue & mask;
-            var broadcast = network | ~mask;
-            if (broadcast <= network + 1)
-            {
-                return;
-            }
-
-            var hostCount = broadcast - network - 1;
-            if (hostCount > 4096)
-            {
-                Debug.LogWarning("[UnityMCP] LAN HTTP probe CIDR skipped because it is too large: " + cidr + ". Use /20 or smaller ranges.");
-                return;
-            }
-
-            for (var value = network + 1; value < broadcast; value++)
-            {
-                var candidate = FromUInt32(value);
-                if (!ContainsString(hosts, candidate))
-                {
-                    hosts.Add(candidate);
-                }
-            }
-        }
-
-        private static uint ToUInt32(IPAddress address)
-        {
-            var bytes = address.GetAddressBytes();
-            return ((uint)bytes[0] << 24)
-                | ((uint)bytes[1] << 16)
-                | ((uint)bytes[2] << 8)
-                | bytes[3];
-        }
-
-        private static string FromUInt32(uint value)
-        {
-            return ((value >> 24) & 255) + "."
-                + ((value >> 16) & 255) + "."
-                + ((value >> 8) & 255) + "."
-                + (value & 255);
-        }
-
-        private static bool ContainsString(List<string> values, string value)
-        {
-            for (var i = 0; i < values.Count; i++)
-            {
-                if (string.Equals(values[i], value, StringComparison.Ordinal))
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private static string PrepareJavaScript(string code, string mode)
@@ -1703,6 +990,26 @@ namespace PuertsUnityMcp.Editor
         }
 
         [Serializable]
+        private sealed class CompileResultRecord
+        {
+            public string requestId;
+            public bool success;
+            public string completedAtUtc;
+            public CompileMessageRecord[] compilerMessages = new CompileMessageRecord[0];
+        }
+
+        [Serializable]
+        private sealed class CompileMessageRecord
+        {
+            public string assemblyPath;
+            public string message;
+            public string file;
+            public int line;
+            public int column;
+            public string type;
+        }
+
+        [Serializable]
         private sealed class PlayModeRequestResult
         {
             public string requestedState;
@@ -1711,47 +1018,5 @@ namespace PuertsUnityMcp.Editor
             public bool isPlayingOrWillChangePlaymode;
         }
 
-        private sealed class LanHttpProbeStats
-        {
-            public int candidates;
-            public int timeoutMs;
-            public int tcpReachable;
-            public int healthOk;
-            public int accepted;
-            public int rejected;
-            public int timeoutOrError;
-            public string firstReachableUrl;
-            public string firstRejectedReason;
-        }
-
-        private sealed class LanHttpProbeResult
-        {
-            public string healthUrl;
-            public bool tcpReachable;
-            public bool healthOk;
-            public UnityMcpHeartbeat heartbeat;
-            public string reason;
-            public string error;
-        }
-
-        [Serializable]
-        private sealed class DiscoveryScanResult
-        {
-            public bool enabled;
-            public string name;
-            public string name_group;
-            public int port;
-            public bool httpProbeEnabled;
-            public int httpProbeCandidates;
-            public int httpProbeTimeoutMs;
-            public int httpProbeTcpReachable;
-            public int httpProbeHealthOk;
-            public int httpProbeFound;
-            public int httpProbeRejected;
-            public int httpProbeTimeoutOrError;
-            public string httpProbeFirstReachableUrl;
-            public string httpProbeFirstRejectedReason;
-            public string httpProbeHint;
-        }
     }
 }

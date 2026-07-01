@@ -71,13 +71,12 @@ To connect directly to a phone or standalone Player MCP without opening Unity Ed
 
 1. Keep the agent working directory at the Unity project root, or pass `--extension-root <UnityProject>/puerts-unity-mcp-extension`.
 2. Keep `runtimeBindAddress` as `0.0.0.0`.
-3. Keep `name_group` the same between the PC agent config and the player runtime config.
-4. Set `selectedTargetKind` to `player` in `<UnityProject>/puerts-unity-mcp-extension/editor-mcp-config.json`, or pass `--target-kind player`.
-5. Use LAN discovery or pass a target URL to the stdio proxy.
+3. Set `selectedTargetKind` to `player` in `<UnityProject>/puerts-unity-mcp-extension/editor-mcp-config.json`, or pass `--target-kind player`.
+4. Set `selectedTargetUrl` to `http://PHONE_IP:18991`, or pass `--target-url http://PHONE_IP:18991`.
 
 The stdio proxy reads local extension files through the system filesystem. When it is connected directly to a phone, it still exposes local `agent.extension.*` tools and can register JavaScript tool manifests from `puerts-unity-mcp-extension/Runtime/runtime-tools`; those scripts execute through the phone's `runtime.js.eval` tool.
 
-Runtime MCP uses low-IO defaults for phones: `enableFileCommandPump`, `enableDiskHeartbeat`, `enableDiscoveredEndpointCache`, and `enableAotMissLog` default to `false`; `screen.screenshot` defaults to in-memory PNG base64 with `screenshotWriteMode: "memory"`.
+Runtime MCP uses low-IO defaults for phones: `enableFileCommandPump`, `enableDiskHeartbeat`, and `enableAotMissLog` default to `false`; `screen.screenshot` defaults to in-memory PNG base64 with `screenshotWriteMode: "memory"`. There is no UDP/LAN discovery; remote Editor and phone/player connections are always explicit URL connections.
 
 For player builds, use the package tools instead of Unity Scripting Define Symbols. `add-pum-to-build.mjs` adds the PuerTS Unity MCP package dependencies, copies `<UnityProject>/puerts-unity-mcp-extension/mobile-mcp-config.json` into `Assets/StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json`, verifies the upstream PuerTS Android native libraries under `third_party/puerts`, and uses the MCP permission library bundled under `Packages/puerts-unity-mcp/Runtime/Plugins/Android`. `remove-pum-from-build.mjs` removes the build dependency entries and copied `StreamingAssets` config again, but keeps the bundled MCP Android permission library in the package.
 
@@ -131,5 +130,9 @@ __unity_mcp.invokeStatic("UnityEngine.Debug", "Log", "message from reflection");
 ```
 
 For phone UI automation, observe first, then act. Useful runtime tools include `screen.screenshot`, `runtime.ui.snapshot`, `runtime.ui.find`, `runtime.ui.raycast`, `runtime.ui.click`, and `input.tap`. Stable game-specific flows should be moved into `puerts-unity-mcp-extension/Runtime/runtime-tools` instead of repeatedly generating one-off eval scripts.
+
+For Editor visual and scene context, use `editor.hierarchy.get`/`get-hierarchy` to export scene hierarchy JSON, `editor.window.screenshot`/`screenshot` to capture an EditorWindow PNG, and `editor.window.focus`/`focus-window` to bring Unity forward. Do not confuse EditorWindow `screenshot` with Runtime `screen.screenshot`; the latter captures Play Mode or phone Player screens.
+
+For performance hotspot diagnosis, use the Editor MCP Profiler workflow. Call `editor.profiler.targets.list`, optionally `editor.profiler.connect` with `target: "editor"` or `profilerTargetName`/`profilerTargetId`/`profilerTargetUrl`, then call `editor.profiler.capture` or `performance.hotspot.report` with `duration: "15s"`. The report is collected from Unity Editor Profiler frame data, works for the Editor or an attached phone/player Profiler target, and writes `profiler-analysis.json`, `top-markers.csv`, and `report.md` under `.puerts-unity-mcp/perf-reports`.
 
 In IL2CPP builds, reflection only works for types and members that survive stripping. If a reflected type is missing, preserve it with link.xml or add a small project wrapper.

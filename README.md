@@ -53,7 +53,7 @@ Node stdio proxy
 | C# + Editor PuerTS   |                           | C# + Runtime PuerTS   |
 +----------------------+                           +-----------------------+
         |
-        | LAN discovery or direct target URL
+        | explicit direct target URL
         v
 +----------------------+
 | Phone / Player MCP   |
@@ -161,15 +161,12 @@ node <UnityProject>/puerts-unity-mcp/Packages/puerts-unity-mcp/Tools~/puerts-uni
   --target-url http://PHONE_IP:18991
 ```
 
-LAN discovery uses UDP port `18992` and `name_group`. If UDP broadcast or multicast is blocked by office Wi-Fi, AP isolation, VLAN routing, VPN policy, or firewall rules, configure HTTP fallback:
+Remote phone/player connections are explicit. Put the URL in `editor-mcp-config.json` or pass `--target-url`:
 
 ```json
 {
   "selectedTargetKind": "player",
-  "name_group": "default",
-  "lanHttpProbeHosts": ["192.168.1.55"],
-  "lanHttpProbeCidrs": ["192.168.1.0/24"],
-  "lanHttpProbeTimeoutMs": 1000
+  "selectedTargetUrl": "http://PHONE_IP:18991"
 }
 ```
 
@@ -231,6 +228,16 @@ Runtime JavaScript tools execute through `runtime.js.eval`, so the same tool mod
 | `editor.state` | Return the current Unity Editor state. |
 | `editor.buildSettings.startupScene` | Return the first enabled scene in Build Settings. |
 | `editor.js.eval` | Execute JavaScript inside the Editor PuerTS VM without generating C# or normally triggering domain reload. |
+| `editor.hierarchy.get` | Export scene/Play Mode hierarchy JSON to `.puerts-unity-mcp/hierarchy-results` and return only file paths plus summary. |
+| `get-hierarchy` | uLoop-compatible alias for `editor.hierarchy.get`. |
+| `editor.window.focus` | Bring the Unity Editor process/window to the foreground. |
+| `focus-window` | uLoop-compatible alias for `editor.window.focus`. |
+| `editor.window.screenshot` | Capture an EditorWindow tab as PNG under `.puerts-unity-mcp/editor-window-screenshots`. This is Editor-only. |
+| `screenshot` | uLoop-compatible EditorWindow screenshot alias. Use Runtime `screen.screenshot` for Player/phone screenshots. |
+| `editor.profiler.targets.list` | List Unity Editor Profiler targets exposed by `ProfilerDriver`, including attached player/phone targets when Unity exposes them. |
+| `editor.profiler.connect` | Best-effort helper to switch the Unity Editor Profiler to Editor or a player/phone target. |
+| `editor.profiler.capture` | Record through the Unity Editor Profiler, then analyze raw frame data into JSON/CSV/Markdown under `.puerts-unity-mcp/perf-reports`. |
+| `editor.profiler.analyze` | Analyze frames already available in the Unity Editor Profiler without starting a new recording. |
 | `editor.scriptTools.list` | List project JavaScript tools from `puerts-unity-mcp-extension/Editor/editor-tools`. |
 | `editor.scriptTools.reload` | Reload Editor project JavaScript tools. |
 | `editor.skills.list` | List project skills from `puerts-unity-mcp-extension/skills`. |
@@ -238,12 +245,13 @@ Runtime JavaScript tools execute through `runtime.js.eval`, so the same tool mod
 | `editor.playmode.set` | Enter, exit, or toggle Play Mode through a delayed Editor request. |
 | `editor.playmode.state` | Return Play Mode state. |
 | `editor.playmode.set.immediate` | Enter, exit, or toggle Play Mode immediately. |
-| `editor.targets.list` | List this Editor and discovered LAN Editor endpoints in the same `name_group`. |
-| `runtime.targets.list` | List local Play Mode Runtime and discovered Player endpoints. |
-| `targets.list` | List Editor, Play Mode Runtime, LAN Editors, and real Player targets. |
-| `lan.discovery.scan` | Send LAN discovery and run configured HTTP fallback probes. |
+| `editor.targets.list` | List this Editor and the configured direct remote Editor target, if set. |
+| `runtime.targets.list` | List local Play Mode Runtime and the configured direct Player target, if set. |
+| `targets.list` | List local Editor, local Play Mode Runtime, and configured direct remote targets. |
 | `runtime.js.eval` | Forward JavaScript from the Editor to local Play Mode Runtime or a remote Player/phone. |
 | `runtime.tool.call` | Call a runtime MCP tool in local Play Mode or a remote Player target. |
+| `performance.hotspot.report` | AIBridge-style alias for the Profiler workflow: capture/analyze Unity Editor Profiler data for Editor or attached phone/player targets and write a Markdown hotspot report. |
+| `perf.hotspot.report` | Alias for `performance.hotspot.report`. |
 | `editor.compile` | Trigger `AssetDatabase.Refresh` and persist compile result hints for domain reload recovery tests. |
 | `op.status` | Read persisted operation state or result. |
 
@@ -255,9 +263,8 @@ These tools are available in Editor Play Mode, Android, iOS, and standalone Play
 |---|---|
 | `mcp.info` | Return Runtime/Player endpoint metadata, health, and capabilities. |
 | `runtime.status` | Return Runtime/Player endpoint state. |
-| `runtime.targets.list` | List this Player endpoint and LAN endpoints discovered by this Player. |
+| `runtime.targets.list` | List this Player endpoint. |
 | `targets.list` | Alias for `runtime.targets.list`. |
-| `lan.discovery.scan` | Send a LAN discovery query for endpoints in the same `name_group`. |
 | `runtime.js.eval` | Execute JavaScript inside the Runtime PuerTS VM. |
 | `runtime.reflection.invoke` | Invoke a static C# method through the reflection gateway. |
 | `runtime.scriptTools.list` | List project JavaScript tools from `puerts-unity-mcp-extension/Runtime/runtime-tools`. |
@@ -371,6 +378,12 @@ Then use runtime MCP tools such as:
 
 For stable game workflows, put project-specific logic into `puerts-unity-mcp-extension/Runtime/runtime-tools` instead of repeatedly generating one-off eval scripts.
 
+### Profiler Hotspot Workflow
+
+Performance diagnosis now uses the Unity Editor Profiler instead of a Runtime sampler. First call `editor.profiler.targets.list` to see targets the Profiler can see. For Editor profiling use `target: "editor"`; for a phone or Player, attach it in the Unity Profiler first, or try `editor.profiler.connect` with `profilerTargetName`, `profilerTargetId`, or `profilerTargetUrl`.
+
+Then call `editor.profiler.capture` or `performance.hotspot.report`, for example with `duration: "15s"`. The analyzer reads frames through `ProfilerDriver.GetRawFrameDataView`, follows the Profile Analyzer style for frame summary, top markers, self time, and GC.Alloc, and writes `profiler-analysis.json`, `top-markers.csv`, and `report.md` under `.puerts-unity-mcp/perf-reports`.
+
 ### Return Values
 
 Return JSON-serializable values: strings, numbers, booleans, arrays, and plain objects. Avoid returning raw Unity objects directly.
@@ -408,7 +421,7 @@ Persistent project configuration:
 
 | Path | Purpose |
 |---|---|
-| `puerts-unity-mcp-extension/editor-mcp-config.json` | Editor, agent, target selection, LAN discovery config |
+| `puerts-unity-mcp-extension/editor-mcp-config.json` | Editor, agent, and explicit target selection config |
 | `puerts-unity-mcp-extension/mobile-mcp-config.json` | Runtime/player config copied into builds |
 | `Packages/puerts-unity-mcp/Runtime/Plugins/Android` | Bundled MCP Android permission library; PuerTS native libraries come from the upstream UPM packages under `third_party/puerts` |
 | `Assets/puerts-unity-mcp/Runtime/Generated/Plugins/puerts_il2cpp` | Generated PuerTS IL2CPP bridge files for the current Unity project; ignore/regenerate instead of committing as reusable package source |

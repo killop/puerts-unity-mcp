@@ -71,7 +71,12 @@ namespace PuertsUnityMcp.Tests
             StringAssert.Contains("editor.js.eval", response);
             StringAssert.Contains("runtime.js.eval", response);
             StringAssert.Contains("__unity_mcp", response);
+            StringAssert.Contains("editor.hierarchy.get", response);
+            StringAssert.Contains("editor.window.screenshot", response);
+            StringAssert.Contains("editor.window.focus", response);
             StringAssert.Contains("screen.screenshot", response);
+            StringAssert.Contains("performance.hotspot.report", response);
+            StringAssert.Contains("editor.profiler.capture", response);
             StringAssert.Contains("puerts-unity-mcp-extension", response);
             Assert.False(response.Contains("\"error\""), response);
         }
@@ -87,7 +92,12 @@ namespace PuertsUnityMcp.Tests
             StringAssert.Contains("editor.js.eval", proxy);
             StringAssert.Contains("runtime.js.eval", proxy);
             StringAssert.Contains("__unity_mcp", proxy);
+            StringAssert.Contains("editor.hierarchy.get", proxy);
+            StringAssert.Contains("editor.window.screenshot", proxy);
+            StringAssert.Contains("editor.window.focus", proxy);
             StringAssert.Contains("screen.screenshot", proxy);
+            StringAssert.Contains("performance.hotspot.report", proxy);
+            StringAssert.Contains("editor.profiler.capture", proxy);
         }
 
         [Test]
@@ -99,19 +109,33 @@ namespace PuertsUnityMcp.Tests
             StringAssert.Contains("const explicitEditorSelection = selector.kind === \"editor\"", proxy);
             StringAssert.Contains("if (selector.kind === \"editor\" && !explicitEditorSelection)", proxy);
             StringAssert.Contains("resolveFromInstances(stateRoot, unityProjectPath)", proxy);
-            StringAssert.Contains("Set selectedTargetId, selectedTargetName, selectedTargetUrl", proxy);
+            StringAssert.Contains("Player MCP targets require an explicit URL", proxy);
             StringAssert.Contains("if (selector.kind === \"editor\" && explicitEditorSelection)", proxy);
             Assert.False(proxy.Contains("const fallbackPlayer = await resolvePlayerEndpoint(stateRoot, selector, config);"));
+            Assert.False(proxy.Contains("dgram"));
+            Assert.False(proxy.Contains("lan.discovery"));
         }
 
         [Test]
-        public void EditorDiscoveryDoesNotPersistLanEditorHeartbeats()
+        public void EditorEndpointDoesNotStartLanDiscovery()
         {
             var packageRoot = ResolvePackageRootForTest();
             var editorEndpoint = File.ReadAllText(Path.Combine(packageRoot, "Editor", "UnityMcpEditorEndpoint.cs"));
 
-            StringAssert.Contains("new UnityMcpLanDiscoveryService(BuildEditorHeartbeat, discoveryGroup, false)", editorEndpoint);
-            Assert.False(editorEndpoint.Contains("new UnityMcpLanDiscoveryService(BuildEditorHeartbeat, discoveryGroup);"));
+            Assert.False(editorEndpoint.Contains("UnityMcpLanDiscoveryService"));
+            Assert.False(editorEndpoint.Contains("lan.discovery.scan"));
+        }
+
+        [Test]
+        public void AndroidManifestDoesNotRequestDiscoveryPermissions()
+        {
+            var packageRoot = ResolvePackageRootForTest();
+            var manifest = File.ReadAllText(Path.Combine(packageRoot, "Runtime", "Plugins", "Android", "puerts-unity-mcp.androidlib", "AndroidManifest.xml"));
+
+            StringAssert.Contains("android.permission.INTERNET", manifest);
+            StringAssert.Contains("android.permission.ACCESS_NETWORK_STATE", manifest);
+            Assert.False(manifest.Contains("android.permission.ACCESS_WIFI_STATE"));
+            Assert.False(manifest.Contains("android.permission.CHANGE_WIFI_MULTICAST_STATE"));
         }
 
         [Test]
@@ -179,6 +203,88 @@ namespace PuertsUnityMcp.Tests
         }
 
         [Test]
+        public void JsonArgumentReaderParsesRawToolArguments()
+        {
+            var json = "{\"duration\":\"15s\",\"target\":\"phone\",\"record\":true,\"hitchThresholdMs\":50,\"scenario\":\"login\"}";
+
+            Assert.True(UnityMcpJsonArgumentReader.TryGetString(json, "duration", out var duration));
+            Assert.AreEqual("15s", duration);
+            Assert.True(UnityMcpJsonArgumentReader.TryGetString(json, "target", out var target));
+            Assert.AreEqual("phone", target);
+            Assert.True(UnityMcpJsonArgumentReader.TryGetBool(json, "record", out var record));
+            Assert.True(record);
+            Assert.True(UnityMcpJsonArgumentReader.TryGetDouble(json, "hitchThresholdMs", out var hitch));
+            Assert.AreEqual(50d, hitch);
+            Assert.True(UnityMcpJsonArgumentReader.TryGetString(json, "scenario", out var scenario));
+            Assert.AreEqual("login", scenario);
+            Assert.True(UnityMcpJsonArgumentReader.TryGetBool("{\"UseSelection\":true}", "UseSelection", out var useSelection));
+            Assert.True(useSelection);
+        }
+
+        [Test]
+        public void EditorProfilerPerformanceToolsUseUnityProfilerRawFrameData()
+        {
+            var packageRoot = ResolvePackageRootForTest();
+            var runtimeHost = File.ReadAllText(Path.Combine(packageRoot, "Runtime", "Runtime", "UnityMcpRuntimeHost.cs"));
+            var editorPerformance = File.ReadAllText(Path.Combine(packageRoot, "Editor", "UnityMcpEditorEndpoint.Performance.cs"));
+
+            Assert.False(runtimeHost.Contains("runtime." + "perf.sample"), runtimeHost);
+            Assert.False(runtimeHost.Contains("runtime." + "perf"), runtimeHost);
+            StringAssert.Contains("editor.profiler.targets.list", editorPerformance);
+            StringAssert.Contains("editor.profiler.connect", editorPerformance);
+            StringAssert.Contains("editor.profiler.capture", editorPerformance);
+            StringAssert.Contains("editor.profiler.analyze", editorPerformance);
+            StringAssert.Contains("performance.hotspot.report", editorPerformance);
+            StringAssert.Contains("RawFrameDataView", editorPerformance);
+            StringAssert.Contains("ProfilerDriver.GetRawFrameDataView", editorPerformance);
+            StringAssert.Contains("GetMarkerMetadataInfo", editorPerformance);
+            StringAssert.Contains("topGcPaths", editorPerformance);
+            StringAssert.Contains("BuildSamplePath", editorPerformance);
+            Assert.False(editorPerformance.Contains("editor.profiler." + "snapshot"), editorPerformance);
+            Assert.False(editorPerformance.Contains("runtime." + "perf.sample"), editorPerformance);
+            StringAssert.Contains("perf-reports", File.ReadAllText(Path.Combine(packageRoot, "Runtime", "Core", "UnityMcpConstants.cs")));
+        }
+
+        [Test]
+        public void ULoopSceneAndWindowToolsAreRegisteredWithoutScreenshotConflict()
+        {
+            var packageRoot = ResolvePackageRootForTest();
+            var editorEndpoint = File.ReadAllText(Path.Combine(packageRoot, "Editor", "UnityMcpEditorEndpoint.cs"));
+            var sceneWindowTools = File.ReadAllText(Path.Combine(packageRoot, "Editor", "UnityMcpEditorEndpoint.SceneWindowTools.cs"));
+
+            StringAssert.Contains("RegisterEditorSceneAndWindowTools();", editorEndpoint);
+            StringAssert.Contains("\"editor.hierarchy.get\"", sceneWindowTools);
+            StringAssert.Contains("\"get-hierarchy\"", sceneWindowTools);
+            StringAssert.Contains("\"editor.window.focus\"", sceneWindowTools);
+            StringAssert.Contains("\"focus-window\"", sceneWindowTools);
+            StringAssert.Contains("\"editor.window.screenshot\"", sceneWindowTools);
+            StringAssert.Contains("\"screenshot\"", sceneWindowTools);
+            StringAssert.Contains("Use Runtime screen.screenshot", sceneWindowTools);
+            StringAssert.Contains("hierarchy-results", sceneWindowTools);
+            StringAssert.Contains("editor-window-screenshots", sceneWindowTools);
+            StringAssert.Contains("UseComponentsLut", sceneWindowTools);
+            Assert.False(sceneWindowTools.Contains("Newtonsoft"), sceneWindowTools);
+            Assert.False(sceneWindowTools.Contains("JsonConvert"), sceneWindowTools);
+        }
+
+        [Test]
+        public void PerformancePortDoesNotUseNewtonsoft()
+        {
+            var packageRoot = ResolvePackageRootForTest();
+            var files = new[]
+            {
+                Path.Combine(packageRoot, "Editor", "UnityMcpEditorEndpoint.Performance.cs")
+            };
+
+            for (var i = 0; i < files.Length; i++)
+            {
+                var content = File.ReadAllText(files[i]);
+                Assert.False(content.Contains("Newtonsoft"), files[i]);
+                Assert.False(content.Contains("JsonConvert"), files[i]);
+            }
+        }
+
+        [Test]
         public void AtomicFileWritesAndReadsJson()
         {
             var root = Path.Combine(Application.temporaryCachePath, "puerts-unity-mcp-tests", Guid.NewGuid().ToString("N"));
@@ -193,6 +299,29 @@ namespace PuertsUnityMcp.Tests
                 Assert.True(AtomicFile.TryReadJson<AtomicTestDto>(path, out var dto));
                 Assert.AreEqual("ok", dto.name);
                 Assert.AreEqual(7, dto.count);
+            }
+            finally
+            {
+                if (Directory.Exists(root))
+                {
+                    Directory.Delete(root, true);
+                }
+            }
+        }
+
+        [Test]
+        public void ProjectConfigSaveDoesNotAbortStartupWhenConfigFileIsLocked()
+        {
+            var root = Path.Combine(Application.temporaryCachePath, "puerts-unity-mcp-tests", Guid.NewGuid().ToString("N"));
+            var path = Path.Combine(root, "editor-mcp-config.json");
+            try
+            {
+                Directory.CreateDirectory(root);
+                File.WriteAllText(path, "{}", System.Text.Encoding.UTF8);
+                using (File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    Assert.DoesNotThrow(() => UnityMcpProjectConfigStore.SaveToPath(path, UnityMcpProjectConfig.CreateDefault()));
+                }
             }
             finally
             {
@@ -442,9 +571,7 @@ namespace PuertsUnityMcp.Tests
                     runtimeBindAddress = "127.0.0.1",
                     runtimePort = 23457,
                     runtimeLogBufferSize = 123,
-                    lanDiscoveryEnabled = true,
                     name = "editor-a",
-                    name_group = "qa",
                     selectedTargetKind = "player",
                     selectedTargetId = "phone-1",
                     selectedTargetName = "qa-phone",
@@ -463,9 +590,7 @@ namespace PuertsUnityMcp.Tests
                 Assert.AreEqual("127.0.0.1", loaded.runtimeBindAddress);
                 Assert.AreEqual(23457, loaded.runtimePort);
                 Assert.AreEqual(123, loaded.runtimeLogBufferSize);
-                Assert.True(loaded.lanDiscoveryEnabled);
                 Assert.AreEqual("editor-a", loaded.name);
-                Assert.AreEqual("qa", loaded.name_group);
                 Assert.AreEqual("player", loaded.selectedTargetKind);
                 Assert.AreEqual("phone-1", loaded.selectedTargetId);
                 Assert.AreEqual("qa-phone", loaded.selectedTargetName);
@@ -485,7 +610,7 @@ namespace PuertsUnityMcp.Tests
         public void RuntimeConfigPartialJsonKeepsDefaultRuntimePermissions()
         {
             var ok = UnityMcpRuntimeConfigStore.TryLoadFromJson(
-                "{\"runtimeAutoStart\":false,\"runtimePort\":24680,\"runtimeLogBufferSize\":77,\"name\":\"phone-a\",\"name_group\":\"qa\"}",
+                "{\"runtimeAutoStart\":false,\"runtimePort\":24680,\"runtimeLogBufferSize\":77,\"name\":\"phone-a\"}",
                 out var config);
 
             Assert.True(ok);
@@ -501,26 +626,47 @@ namespace PuertsUnityMcp.Tests
             Assert.True(config.runInBackground);
             Assert.False(config.enableFileCommandPump);
             Assert.False(config.enableDiskHeartbeat);
-            Assert.False(config.enableDiscoveredEndpointCache);
             Assert.False(config.enableAotMissLog);
             Assert.AreEqual("memory", config.screenshotWriteMode);
             Assert.AreEqual(30000, config.heartbeatIntervalMs);
             Assert.AreEqual(4, config.maxCommandsPerFrame);
             Assert.AreEqual("phone-a", config.name);
-            Assert.AreEqual("qa", config.name_group);
+        }
+
+        [Test]
+        public void ConfigSerializationDoesNotContainLanDiscoveryFields()
+        {
+            var projectConfig = UnityMcpProjectConfig.CreateDefault();
+            projectConfig.Normalize();
+            var projectJson = UnityJson.ToJson(projectConfig, true);
+
+            StringAssert.Contains("selectedTargetUrl", projectJson);
+            StringAssert.Contains("explicit URL", projectJson);
+            Assert.False(projectJson.Contains("lanDiscoveryEnabled"));
+            Assert.False(projectJson.Contains("lanHttpProbe"));
+            Assert.False(projectJson.Contains("name_group"));
+
+            var runtimeConfig = UnityMcpRuntimeConfig.CreateDefault();
+            runtimeConfig.Normalize();
+            var runtimeJson = UnityJson.ToJson(runtimeConfig, true);
+
+            StringAssert.Contains("runtimeBindAddress", runtimeJson);
+            StringAssert.Contains("HTTP only", runtimeJson);
+            Assert.False(runtimeJson.Contains("lanDiscoveryEnabled"));
+            Assert.False(runtimeJson.Contains("enableDiscoveredEndpointCache"));
+            Assert.False(runtimeJson.Contains("name_group"));
         }
 
         [Test]
         public void RuntimeConfigNormalizesRuntimeIoPolicy()
         {
             var ok = UnityMcpRuntimeConfigStore.TryLoadFromJson(
-                "{\"screenshotWriteMode\":\"FILE\",\"heartbeatIntervalMs\":0,\"enableDiskHeartbeat\":true,\"enableFileCommandPump\":true,\"enableDiscoveredEndpointCache\":true,\"enableAotMissLog\":true}",
+                "{\"screenshotWriteMode\":\"FILE\",\"heartbeatIntervalMs\":0,\"enableDiskHeartbeat\":true,\"enableFileCommandPump\":true,\"enableAotMissLog\":true}",
                 out var config);
 
             Assert.True(ok);
             Assert.True(config.enableFileCommandPump);
             Assert.True(config.enableDiskHeartbeat);
-            Assert.True(config.enableDiscoveredEndpointCache);
             Assert.True(config.enableAotMissLog);
             Assert.AreEqual("file", config.screenshotWriteMode);
             Assert.AreEqual(30000, config.heartbeatIntervalMs);
@@ -539,8 +685,6 @@ namespace PuertsUnityMcp.Tests
                 var config = UnityMcpProjectConfigStore.LoadFromPath(path);
 
                 Assert.AreEqual(UnityMcpProjectConfig.LatestVersion, config.version);
-                Assert.True(config.lanDiscoveryEnabled);
-                Assert.AreEqual("default", config.name_group);
                 Assert.AreEqual("editor", config.selectedTargetKind);
                 Assert.AreEqual(string.Empty, config.selectedTargetId);
                 Assert.AreEqual(25001, config.editorPort);
@@ -564,9 +708,7 @@ namespace PuertsUnityMcp.Tests
                 runtimeBindAddress = "127.0.0.1",
                 runtimePort = 24681,
                 runtimeLogBufferSize = 88,
-                lanDiscoveryEnabled = true,
                 name = "runtime-from-project",
-                name_group = "qa",
                 serverName = "editor-only"
             };
 
@@ -583,15 +725,12 @@ namespace PuertsUnityMcp.Tests
             Assert.True(runtimeConfig.allowFileAccess);
             Assert.True(runtimeConfig.allowNetworkAccess);
             Assert.True(runtimeConfig.allowRuntimeCodeLoad);
-            Assert.True(runtimeConfig.lanDiscoveryEnabled);
             Assert.False(runtimeConfig.enableFileCommandPump);
             Assert.False(runtimeConfig.enableDiskHeartbeat);
-            Assert.False(runtimeConfig.enableDiscoveredEndpointCache);
             Assert.False(runtimeConfig.enableAotMissLog);
             Assert.AreEqual("memory", runtimeConfig.screenshotWriteMode);
             Assert.AreEqual(30000, runtimeConfig.heartbeatIntervalMs);
             Assert.AreEqual("runtime-from-project", runtimeConfig.name);
-            Assert.AreEqual("qa", runtimeConfig.name_group);
         }
 
         [Test]
@@ -639,55 +778,6 @@ namespace PuertsUnityMcp.Tests
                 Assert.AreEqual("bool", enabledResult.kind);
                 Assert.AreEqual(EditorBuildSettings.scenes[0].enabled, enabledResult.boolValue);
             }
-        }
-
-        [Test]
-        public void LanDiscoveryAcceptsOnlyMatchingNameGroup()
-        {
-            var heartbeat = new UnityMcpHeartbeat
-            {
-                endpointId = "phone_1",
-                endpointKind = "player",
-                endpointName = "Phone 1",
-                projectName = "Phone Game",
-                name = "qa-phone",
-                name_group = "qa",
-                httpUrl = "http://127.0.0.1:18991",
-                port = 18991,
-                platform = "Android",
-                isEditor = false,
-                capabilities = new UnityMcpCapabilities { runtimeToolCall = true, http = true }
-            };
-            var json = UnityMcpLanDiscoveryService.BuildAnnouncementJson(heartbeat, "qa");
-
-            Assert.True(UnityMcpLanDiscoveryService.TryBuildHeartbeatFromMessageJson(json, "qa", "192.168.1.25", out var accepted));
-            Assert.AreEqual("phone_1", accepted.endpointId);
-            Assert.AreEqual("qa-phone", accepted.name);
-            Assert.AreEqual("qa", accepted.name_group);
-            Assert.AreEqual("http://192.168.1.25:18991", accepted.httpUrl);
-            Assert.AreEqual(UnityMcpConstants.DiscoverySource, accepted.source);
-            Assert.False(UnityMcpLanDiscoveryService.TryBuildHeartbeatFromMessageJson(json, "prod", "192.168.1.25", out _));
-        }
-
-        [Test]
-        public void LanDiscoveryRewritesWildcardHttpUrlToSenderAddress()
-        {
-            var heartbeat = new UnityMcpHeartbeat
-            {
-                endpointId = "phone_2",
-                endpointKind = "player",
-                endpointName = "Phone 2",
-                name = "qa-phone-2",
-                name_group = "qa",
-                httpUrl = "http://0.0.0.0:18991",
-                port = 18991,
-                platform = "Android",
-                capabilities = new UnityMcpCapabilities { runtimeToolCall = true, http = true }
-            };
-            var json = UnityMcpLanDiscoveryService.BuildAnnouncementJson(heartbeat, "qa");
-
-            Assert.True(UnityMcpLanDiscoveryService.TryBuildHeartbeatFromMessageJson(json, "qa", "192.168.1.26", out var accepted));
-            Assert.AreEqual("http://192.168.1.26:18991", accepted.httpUrl);
         }
 
         [Test]

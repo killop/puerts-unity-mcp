@@ -293,9 +293,10 @@ export async function runUnityMcpSmokeTest(options) {
 
     const tools = await invokeMcp(endpoint.baseUrl, { jsonrpc: "2.0", id: "tools", method: "tools/list", params: {} });
     const toolNames = (tools.result?.tools || []).map((tool) => tool.name);
-    for (const name of ["editor.js.eval", "runtime.js.eval", "runtime.tool.call", "editor.playmode.set", "editor.buildSettings.startupScene", "targets.list"]) {
+    for (const name of ["editor.js.eval", "runtime.js.eval", "runtime.tool.call", "editor.playmode.set", "editor.buildSettings.startupScene", "targets.list", "editor.profiler.capture", "performance.hotspot.report"]) {
       assertCondition(toolNames.includes(name), `tools/list did not include ${name}`);
     }
+    assertCondition(!toolNames.includes("runtime." + "perf.sample"), "tools/list still includes removed runtime perf sample");
 
     results.push(pass("tools/list", { count: toolNames.length, names: toolNames }));
     const state = await callTool(endpoint.baseUrl, "state", "editor.state", {});
@@ -395,15 +396,13 @@ function newPackageDependencyLines(hasExistingDependencies, options) {
 
 function copyMobileConfig(projectRoot) {
   const source = path.join(projectRoot, "puerts-unity-mcp-extension", "mobile-mcp-config.json");
-  if (!fs.existsSync(source)) {
-    ensureDirectory(path.dirname(source));
-    fs.writeFileSync(source, `${JSON.stringify(defaultMobileConfig(), null, 2)}${os.EOL}`, "utf8");
-    console.log(`Created default mobile MCP config at ${source}`);
-  }
+  const config = normalizeMobileConfig(fs.existsSync(source) ? readJsonFileOrDefault(source, {}) : {});
+  ensureDirectory(path.dirname(source));
+  writeJsonIfChanged(source, config);
 
   const destination = path.join(projectRoot, "Assets", "StreamingAssets", "PuertsUnityMcp", "mobile-mcp-config.json");
   ensureDirectory(path.dirname(destination));
-  fs.copyFileSync(source, destination);
+  writeJsonIfChanged(destination, config);
   writeTextIfMissing(path.join(projectRoot, "Assets", "StreamingAssets", "PuertsUnityMcp.meta"), [
     "fileFormatVersion: 2",
     "guid: fedd773bed9449942bd9f4f860d880d4",
@@ -559,23 +558,24 @@ function writeAndroidPermissions(projectRoot, options) {
   const androidRoot = path.join(resolvePumAndroidPluginRoot(projectRoot, options), "puerts-unity-mcp.androidlib");
   const manifestPath = path.join(androidRoot, "AndroidManifest.xml");
   const projectPropertiesPath = path.join(androidRoot, "project.properties");
+  const manifest = [
+    '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
+    '  <uses-permission android:name="android.permission.INTERNET" />',
+    '  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
+    "</manifest>",
+    ""
+  ].join("\n");
+  const projectProperties = "target=android-35\n";
   if (fs.existsSync(manifestPath) && fs.existsSync(projectPropertiesPath) && fs.existsSync(`${androidRoot}.meta`)) {
+    writeTextIfChanged(manifestPath, manifest);
+    writeTextIfChanged(projectPropertiesPath, projectProperties);
     console.log(`Android MCP permission library is already bundled at ${androidRoot}`);
     return;
   }
 
   ensureDirectory(androidRoot);
-  const manifest = [
-    '<manifest xmlns:android="http://schemas.android.com/apk/res/android">',
-    '  <uses-permission android:name="android.permission.INTERNET" />',
-    '  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />',
-    '  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />',
-    '  <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />',
-    "</manifest>",
-    ""
-  ].join("\n");
-  fs.writeFileSync(manifestPath, manifest, "utf8");
-  fs.writeFileSync(projectPropertiesPath, "target=android-35\n", "utf8");
+  writeTextIfChanged(manifestPath, manifest);
+  writeTextIfChanged(projectPropertiesPath, projectProperties);
   writeTextIfMissing(`${androidRoot}.meta`, [
     "fileFormatVersion: 2",
     "guid: fee75e8788b69b94e94d42d7f459a053",
@@ -645,14 +645,14 @@ function removeLegacyProjectGeneratedPluginArtifacts(projectRoot) {
 
 function defaultMobileConfig() {
   return {
-    version: 4,
+    version: 5,
+    _comment_runtimeLanDirect: "Store the phone/player config at puerts-unity-mcp-extension/mobile-mcp-config.json. Run node Tools~/add-pum-to-build.mjs to copy it into StreamingAssets/PuertsUnityMcp/mobile-mcp-config.json and include PuerTS Unity MCP in player builds. Keep runtimeBindAddress as 0.0.0.0 so the PC agent can connect by explicit URL.",
+    _comment_runtimeIo: "Runtime MCP uses HTTP only. Disk heartbeat, file command pump, file screenshots, and AOT miss logs are opt-in to keep phone IO low.",
     runtimeAutoStart: true,
     runtimeBindAddress: "0.0.0.0",
     runtimePort: 18991,
     runtimeLogBufferSize: 500,
-    lanDiscoveryEnabled: true,
     name: "",
-    name_group: "default",
     allowJsEval: true,
     allowReflection: true,
     allowPrivateReflection: true,
@@ -664,11 +664,23 @@ function defaultMobileConfig() {
     runInBackground: true,
     enableFileCommandPump: false,
     enableDiskHeartbeat: false,
-    enableDiscoveredEndpointCache: false,
     enableAotMissLog: false,
     screenshotWriteMode: "memory",
     heartbeatIntervalMs: 30000
   };
+}
+
+function normalizeMobileConfig(raw) {
+  const defaults = defaultMobileConfig();
+  const normalized = {};
+  for (const [key, value] of Object.entries(defaults)) {
+    normalized[key] = Object.prototype.hasOwnProperty.call(raw || {}, key) ? raw[key] : value;
+  }
+
+  normalized.version = defaults.version;
+  normalized._comment_runtimeLanDirect = defaults._comment_runtimeLanDirect;
+  normalized._comment_runtimeIo = defaults._comment_runtimeIo;
+  return normalized;
 }
 
 function addPackageTestable(manifestPath) {
@@ -967,6 +979,35 @@ function writeTextIfMissing(filePath, content) {
 
   ensureDirectory(path.dirname(filePath));
   fs.writeFileSync(filePath, content, "utf8");
+}
+
+function writeTextIfChanged(filePath, content) {
+  if (fs.existsSync(filePath) && fs.readFileSync(filePath, "utf8") === content) {
+    return;
+  }
+
+  ensureDirectory(path.dirname(filePath));
+  fs.writeFileSync(filePath, content, "utf8");
+  console.log(`Wrote ${filePath}`);
+}
+
+function readJsonFileOrDefault(filePath, defaultValue) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch {
+    return defaultValue;
+  }
+}
+
+function writeJsonIfChanged(filePath, value) {
+  const next = `${JSON.stringify(value, null, 2)}${os.EOL}`;
+  if (fs.existsSync(filePath) && fs.readFileSync(filePath, "utf8") === next) {
+    return;
+  }
+
+  ensureDirectory(path.dirname(filePath));
+  fs.writeFileSync(filePath, next, "utf8");
+  console.log(`Wrote ${filePath}`);
 }
 
 async function expandReleasePackage(packageName, version, upmsRoot, downloadsRoot) {

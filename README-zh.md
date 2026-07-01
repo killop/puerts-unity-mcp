@@ -53,7 +53,7 @@ Node stdio proxy
 | C# + Editor PuerTS   |                           | C# + Runtime PuerTS   |
 +----------------------+                           +-----------------------+
         |
-        | LAN discovery or direct target URL
+        | 显式 direct target URL
         v
 +----------------------+
 | Phone / Player MCP   |
@@ -161,15 +161,12 @@ node <UnityProject>/puerts-unity-mcp/Packages/puerts-unity-mcp/Tools~/puerts-uni
   --target-url http://PHONE_IP:18991
 ```
 
-LAN discovery 使用 UDP `18992` 和 `name_group`。如果办公 Wi-Fi、AP 隔离、跨 VLAN、VPN 策略或防火墙禁掉 UDP broadcast/multicast，可以使用 HTTP fallback：
+远程手机/Player 连接只走显式 URL。可以写进 `editor-mcp-config.json`，也可以启动 proxy 时传 `--target-url`：
 
 ```json
 {
   "selectedTargetKind": "player",
-  "name_group": "default",
-  "lanHttpProbeHosts": ["192.168.1.55"],
-  "lanHttpProbeCidrs": ["192.168.1.0/24"],
-  "lanHttpProbeTimeoutMs": 1000
+  "selectedTargetUrl": "http://PHONE_IP:18991"
 }
 ```
 
@@ -231,6 +228,16 @@ Runtime JS tool 会通过 `runtime.js.eval` 执行，所以同一套工具模型
 | `editor.state` | 返回 Unity Editor 当前状态。 |
 | `editor.buildSettings.startupScene` | 返回 Build Settings 第一个启用场景。 |
 | `editor.js.eval` | 在 Editor PuerTS VM 中执行 JS，不生成 C#，正常情况下不触发 domain reload。 |
+| `editor.hierarchy.get` | 导出 Scene/Play Mode hierarchy JSON 到 `.puerts-unity-mcp/hierarchy-results`，返回摘要和文件路径。 |
+| `get-hierarchy` | 兼容 uLoop 的 `editor.hierarchy.get` 别名。 |
+| `editor.window.focus` | 将 Unity Editor 窗口置前。 |
+| `focus-window` | 兼容 uLoop 的 `editor.window.focus` 别名。 |
+| `editor.window.screenshot` | 截取 EditorWindow tab 到 `.puerts-unity-mcp/editor-window-screenshots`，仅 Editor 可用。 |
+| `screenshot` | 兼容 uLoop 的 EditorWindow 截图别名；Player/手机截图请用 Runtime `screen.screenshot`。 |
+| `editor.profiler.targets.list` | 列出 Unity Editor Profiler 暴露的目标，包括已连接的 Player/手机目标。 |
+| `editor.profiler.connect` | 尝试将 Unity Editor Profiler 切到 Editor 或 Player/手机目标。 |
+| `editor.profiler.capture` | 通过 Unity Editor Profiler 录制并分析 RawFrameData，输出 JSON/CSV/Markdown 到 `.puerts-unity-mcp/perf-reports`。 |
+| `editor.profiler.analyze` | 分析 Unity Editor Profiler 中已有的帧数据，不重新录制。 |
 | `editor.scriptTools.list` | 列出 `puerts-unity-mcp-extension/Editor/editor-tools` 中的项目 JS tools。 |
 | `editor.scriptTools.reload` | 重新加载 Editor 项目 JS tools。 |
 | `editor.skills.list` | 列出 `puerts-unity-mcp-extension/skills` 中的项目 skills。 |
@@ -238,12 +245,13 @@ Runtime JS tool 会通过 `runtime.js.eval` 执行，所以同一套工具模型
 | `editor.playmode.set` | 延迟进入、退出或切换 Play Mode。 |
 | `editor.playmode.state` | 返回 Play Mode 状态。 |
 | `editor.playmode.set.immediate` | 立即进入、退出或切换 Play Mode。 |
-| `editor.targets.list` | 列出当前 Editor 和同 `name_group` 的 LAN Editor endpoints。 |
-| `runtime.targets.list` | 列出本地 Play Mode Runtime 和发现到的 Player endpoints。 |
-| `targets.list` | 列出 Editor、Play Mode Runtime、LAN Editors 和真实 Player targets。 |
-| `lan.discovery.scan` | 发送 LAN discovery，并按配置执行 HTTP fallback 探测。 |
+| `editor.targets.list` | 列出当前 Editor 和配置中的直连远程 Editor target。 |
+| `runtime.targets.list` | 列出本地 Play Mode Runtime 和配置中的直连 Player target。 |
+| `targets.list` | 列出本地 Editor、本地 Play Mode Runtime 和配置中的直连远程 target。 |
 | `runtime.js.eval` | 从 Editor 转发 JS 到本地 Play Mode Runtime 或远程 Player/手机。 |
 | `runtime.tool.call` | 从 Editor 调用本地 Play Mode 或远程 Player 的 runtime MCP tool。 |
+| `performance.hotspot.report` | 兼容 AIBridge 的性能热点入口：通过 Unity Editor Profiler 采集/分析 Editor 或已连接手机/Player 数据，并输出 Markdown 报告。 |
+| `perf.hotspot.report` | `performance.hotspot.report` 的别名。 |
 | `editor.compile` | 触发 `AssetDatabase.Refresh`，并持久化编译结果 hint，用于 domain reload 恢复测试。 |
 | `op.status` | 读取持久 operation 状态或结果。 |
 
@@ -255,9 +263,8 @@ Runtime JS tool 会通过 `runtime.js.eval` 执行，所以同一套工具模型
 |---|---|
 | `mcp.info` | 返回 Runtime/Player endpoint metadata、health 和 capability。 |
 | `runtime.status` | 返回 Runtime/Player endpoint 状态。 |
-| `runtime.targets.list` | 列出当前 Player endpoint 和该 Player 发现到的 LAN endpoints。 |
+| `runtime.targets.list` | 列出当前 Player endpoint。 |
 | `targets.list` | `runtime.targets.list` 的别名。 |
-| `lan.discovery.scan` | 发送同 `name_group` 的 LAN discovery query。 |
 | `runtime.js.eval` | 在 Runtime PuerTS VM 中执行 JS。 |
 | `runtime.reflection.invoke` | 通过反射 gateway 调用静态 C# 方法。 |
 | `runtime.scriptTools.list` | 列出 `puerts-unity-mcp-extension/Runtime/runtime-tools` 中的项目 JS tools。 |
@@ -371,6 +378,12 @@ return {
 
 稳定的项目流程不要一直生成一次性 eval 脚本，应该沉淀到 `puerts-unity-mcp-extension/Runtime/runtime-tools`。
 
+### Profiler 性能热点流程
+
+性能分析现在依赖 Unity Editor 自带 Profiler，而不是 Runtime 采样器。先用 `editor.profiler.targets.list` 查看 Profiler 能看到的目标；分析 Editor 时传 `target: "editor"`，分析手机或 Player 时先用 Unity Profiler 连接目标，或尝试 `editor.profiler.connect` 的 `profilerTargetName` / `profilerTargetId` / `profilerTargetUrl`。
+
+然后调用 `editor.profiler.capture` 或 `performance.hotspot.report`，例如 `duration: "15s"`。工具会用 `ProfilerDriver.GetRawFrameDataView` 读取帧数据，参考 Profile Analyzer 的思路计算 frame summary、top markers、self time 和 GC.Alloc，并写出 `profiler-analysis.json`、`top-markers.csv`、`report.md` 到 `.puerts-unity-mcp/perf-reports`。
+
 ### 返回值规则
 
 返回 JSON 可序列化数据：字符串、数字、布尔值、数组和普通对象。不要直接返回 Unity 对象。
@@ -408,7 +421,7 @@ C# 侧 JSON 序列化只使用 Unity `JsonUtility`。项目不依赖 Newtonsoft.
 
 | 路径 | 用途 |
 |---|---|
-| `puerts-unity-mcp-extension/editor-mcp-config.json` | Editor、Agent、target 选择、LAN discovery 配置 |
+| `puerts-unity-mcp-extension/editor-mcp-config.json` | Editor、Agent 和显式 target 选择配置 |
 | `puerts-unity-mcp-extension/mobile-mcp-config.json` | Runtime / Player 配置，会复制进构建 |
 | `Packages/puerts-unity-mcp/Runtime/Plugins/Android` | 随包提供的 MCP Android 权限库；PuerTS native libraries 来自 `third_party/puerts` 官方 UPM 包 |
 | `Assets/puerts-unity-mcp/Runtime/Generated/Plugins/puerts_il2cpp` | 当前 Unity 工程生成的 PuerTS IL2CPP bridge 文件；应忽略并按工程重新生成，不要当成通用 package 源码提交 |

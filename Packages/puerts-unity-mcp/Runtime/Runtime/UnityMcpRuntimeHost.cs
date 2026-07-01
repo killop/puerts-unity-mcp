@@ -28,19 +28,15 @@ namespace PuertsUnityMcp
         private PuertsScriptHost scriptHost;
         private UnityMcpHttpServer httpServer;
         private CommandFilePump commandPump;
-        private UnityMcpLanDiscoveryService discoveryService;
         private DateTime startedAtUtc;
         private DateTime lastHeartbeatUtc;
         private string endpointId;
         private int actualPort;
         private long lastMainThreadTickUtcTicks;
         private bool initialized;
-        private bool lanDiscoveryEnabled;
-        private string discoveryName;
-        private string discoveryGroup;
+        private string endpointDisplayName;
         private bool enableFileCommandPump;
         private bool enableDiskHeartbeat;
-        private bool enableDiscoveredEndpointCache;
         private string screenshotWriteMode = "memory";
         private int heartbeatIntervalMs = 30000;
 
@@ -85,8 +81,6 @@ namespace PuertsUnityMcp
                 + ", autoStart=" + config.runtimeAutoStart
                 + ", bind=" + config.runtimeBindAddress
                 + ", port=" + config.runtimePort
-                + ", lanDiscovery=" + config.lanDiscoveryEnabled
-                + ", name_group=" + config.name_group
                 + ", allowJsEval=" + config.allowJsEval
                 + ", allowReflection=" + config.allowReflection);
             if (!config.runtimeAutoStart)
@@ -123,13 +117,11 @@ namespace PuertsUnityMcp
             {
                 StartHttpServerIfNeeded();
                 WriteHeartbeat();
-                StartDiscoveryIfNeeded();
             }
         }
 
         private void OnDisable()
         {
-            StopDiscovery();
             StopHttpServer();
         }
 
@@ -138,7 +130,6 @@ namespace PuertsUnityMcp
             if (Instance == this)
             {
                 StopHttpServer();
-                StopDiscovery();
                 runtimeLogBuffer.Dispose();
                 scriptHost?.Dispose();
                 scriptHost = null;
@@ -152,7 +143,6 @@ namespace PuertsUnityMcp
             MarkMainThreadTick();
             scriptHost?.Tick();
             commandPump?.Tick(Math.Max(1, settings == null ? 4 : settings.maxCommandsPerFrame));
-            discoveryService?.Tick();
 
             if ((DateTime.UtcNow - lastHeartbeatUtc).TotalMilliseconds >= Math.Max(1000, heartbeatIntervalMs))
             {
@@ -183,9 +173,7 @@ namespace PuertsUnityMcp
                 + ", mcpEnabled=" + settings.mcpEnabled
                 + ", bind=" + settings.bindAddress
                 + ", port=" + settings.httpPort
-                + ", lanDiscovery=" + lanDiscoveryEnabled
-                + ", discoveryName=" + discoveryName
-                + ", discoveryGroup=" + discoveryGroup
+                + ", endpointName=" + endpointDisplayName
                 + ", runInBackground=" + settings.runInBackground);
             scriptHost = new PuertsScriptHost("runtime:" + endpointId);
             runtimeLogBuffer.Initialize(settings.logBufferSize <= 0 ? 500 : settings.logBufferSize);
@@ -209,7 +197,6 @@ namespace PuertsUnityMcp
 
             StartHttpServerIfNeeded();
             WriteHeartbeat();
-            StartDiscoveryIfNeeded();
             initialized = true;
         }
 
@@ -229,7 +216,6 @@ namespace PuertsUnityMcp
                 endpointKind = EndpointKind,
                 endpointId = EndpointId,
                 endpointName = EndpointName,
-                name_group = UnityMcpLanDiscoveryService.NormalizeGroup(discoveryGroup),
                 projectRoot = UnityMcpPaths.ProjectRoot,
                 stateRoot = UnityMcpPaths.StateRoot,
                 httpUrl = httpServer == null ? null : httpServer.Url,
@@ -276,24 +262,11 @@ namespace PuertsUnityMcp
             tools.Register(new DelegateUnityMcpTool("runtime.status", "Return runtime endpoint state.", JsonSchemas.Object(), (ctx, args) =>
                 Task.FromResult(BuildHealthJson())));
 
-            tools.Register(new DelegateUnityMcpTool("runtime.targets.list", "List this Player MCP endpoint and LAN endpoints discovered by this player.", JsonSchemas.Object(), (ctx, args) =>
+            tools.Register(new DelegateUnityMcpTool("runtime.targets.list", "List this Player MCP endpoint.", JsonSchemas.Object(), (ctx, args) =>
                 Task.FromResult(UnityJson.ToJson(ListTargets()))));
 
-            tools.Register(new DelegateUnityMcpTool("targets.list", "List this Player MCP endpoint and LAN endpoints discovered by this player.", JsonSchemas.Object(), (ctx, args) =>
+            tools.Register(new DelegateUnityMcpTool("targets.list", "List this Player MCP endpoint.", JsonSchemas.Object(), (ctx, args) =>
                 Task.FromResult(UnityJson.ToJson(ListTargets()))));
-
-            tools.Register(new DelegateUnityMcpTool("lan.discovery.scan", "Broadcast a LAN discovery query for endpoints in the same name_group.", JsonSchemas.Object(), (ctx, args) =>
-            {
-                discoveryService?.SendQuery();
-                return Task.FromResult(UnityJson.ToJson(new DiscoveryScanResult
-                {
-                    enabled = discoveryService != null && discoveryService.IsRunning,
-                    endpointKind = EndpointKind,
-                    name = discoveryName,
-                    name_group = discoveryGroup,
-                    port = UnityMcpConstants.DiscoveryPort
-                }));
-            }));
 
             tools.Register(new DelegateUnityMcpTool("runtime.js.eval", "Execute PuerTS JavaScript in the runtime VM, including Play Mode and phone/player builds. Use runtime-safe CS.UnityEngine APIs when wrapped; use __unity_mcp.invokeStatic(type, method, ...args), getStatic, getStaticPath, setStatic, or typeExists as reflection fallback. Return JSON-serializable data.", JsonSchemas.Object(
                 JsonSchemas.StringProperty("code", "PuerTS JavaScript. In script mode use return; in expression mode provide a single expression. Prefer CS.* APIs, fallback to __unity_mcp for reflection."),
@@ -567,12 +540,9 @@ namespace PuertsUnityMcp
             settings.allowRuntimeCodeLoad = config.allowRuntimeCodeLoad;
             settings.maxCommandsPerFrame = config.maxCommandsPerFrame <= 0 ? 4 : config.maxCommandsPerFrame;
             settings.runInBackground = config.runInBackground;
-            lanDiscoveryEnabled = config.lanDiscoveryEnabled;
-            discoveryName = UnityMcpLanDiscoveryService.ResolveName(config.name, Application.productName);
-            discoveryGroup = UnityMcpLanDiscoveryService.NormalizeGroup(config.name_group);
+            endpointDisplayName = UnityMcpConstants.ResolveEndpointName(config.name, Application.productName, settings.targetId);
             enableFileCommandPump = config.enableFileCommandPump;
             enableDiskHeartbeat = config.enableDiskHeartbeat;
-            enableDiscoveredEndpointCache = config.enableDiscoveredEndpointCache;
             screenshotWriteMode = config.screenshotWriteMode;
             heartbeatIntervalMs = Math.Max(1000, config.heartbeatIntervalMs);
             ReflectionGateway.EnableAotMissLog = config.enableAotMissLog;
@@ -586,45 +556,6 @@ namespace PuertsUnityMcp
         {
             httpServer?.Dispose();
             httpServer = null;
-        }
-
-        private void StartDiscoveryIfNeeded()
-        {
-            if (Application.isEditor)
-            {
-                Debug.Log("[UnityMCP] LAN discovery skipped: running in Editor.");
-                return;
-            }
-
-            if (!lanDiscoveryEnabled)
-            {
-                Debug.Log("[UnityMCP] LAN discovery skipped: lanDiscoveryEnabled=false.");
-                return;
-            }
-
-            if (discoveryService != null)
-            {
-                Debug.Log("[UnityMCP] LAN discovery skipped: already running.");
-                return;
-            }
-
-            if (httpServer == null)
-            {
-                Debug.LogWarning("[UnityMCP] LAN discovery skipped: HTTP server is not running.");
-                return;
-            }
-
-            Debug.Log("[UnityMCP] LAN discovery starting. name=" + discoveryName
-                + ", group=" + discoveryGroup
-                + ", port=" + UnityMcpConstants.DiscoveryPort
-                + ", httpUrl=" + httpServer.Url + ".");
-            discoveryService = new UnityMcpLanDiscoveryService(BuildHeartbeat, discoveryGroup, enableDiscoveredEndpointCache);
-        }
-
-        private void StopDiscovery()
-        {
-            discoveryService?.Dispose();
-            discoveryService = null;
         }
 
         private void WriteHeartbeat()
@@ -647,8 +578,7 @@ namespace PuertsUnityMcp
                 endpointName = EndpointName,
                 projectRoot = UnityMcpPaths.ProjectRoot,
                 projectName = Application.productName,
-                name = UnityMcpLanDiscoveryService.ResolveName(discoveryName, EndpointName, EndpointId),
-                name_group = UnityMcpLanDiscoveryService.NormalizeGroup(discoveryGroup),
+                name = UnityMcpConstants.ResolveEndpointName(endpointDisplayName, EndpointName, EndpointId),
                 processId = GetProcessId(),
                 httpUrl = httpServer == null ? null : httpServer.Url,
                 port = actualPort,
@@ -668,103 +598,7 @@ namespace PuertsUnityMcp
                 BuildHeartbeat()
             };
 
-            AppendDiscoveredTargets(targets, discoveryService == null ? null : discoveryService.GetDiscoveredHeartbeats());
-            if (enableDiscoveredEndpointCache)
-            {
-                AppendDiscoveredTargets(targets, Path.Combine(UnityMcpPaths.StateRoot, UnityMcpConstants.EditorsDirectoryName));
-                AppendDiscoveredTargets(targets, Path.Combine(UnityMcpPaths.StateRoot, UnityMcpConstants.PlayersDirectoryName));
-            }
-
             return new UnityMcpTargetList { targets = targets.ToArray() };
-        }
-
-        private void AppendDiscoveredTargets(List<UnityMcpHeartbeat> targets, UnityMcpHeartbeat[] heartbeats)
-        {
-            if (targets == null || heartbeats == null)
-            {
-                return;
-            }
-
-            for (var i = 0; i < heartbeats.Length; i++)
-            {
-                AppendDiscoveredTarget(targets, heartbeats[i]);
-            }
-        }
-
-        private void AppendDiscoveredTargets(List<UnityMcpHeartbeat> targets, string root)
-        {
-            if (targets == null || string.IsNullOrEmpty(root) || !Directory.Exists(root))
-            {
-                return;
-            }
-
-            foreach (var heartbeatPath in Directory.GetFiles(root, UnityMcpConstants.HeartbeatFileName, SearchOption.AllDirectories))
-            {
-                if (!AtomicFile.TryReadJson<UnityMcpHeartbeat>(heartbeatPath, out var heartbeat) || heartbeat == null)
-                {
-                    continue;
-                }
-
-                if (!ShouldIncludeDiscoveredHeartbeat(heartbeat))
-                {
-                    continue;
-                }
-
-                AppendDiscoveredTarget(targets, heartbeat);
-            }
-        }
-
-        private void AppendDiscoveredTarget(List<UnityMcpHeartbeat> targets, UnityMcpHeartbeat heartbeat)
-        {
-            if (targets == null || !ShouldIncludeDiscoveredHeartbeat(heartbeat))
-            {
-                return;
-            }
-
-            if (string.Equals(heartbeat.endpointId, EndpointId, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            for (var i = 0; i < targets.Count; i++)
-            {
-                if (targets[i] != null && string.Equals(targets[i].endpointId, heartbeat.endpointId, StringComparison.Ordinal))
-                {
-                    return;
-                }
-            }
-
-            targets.Add(heartbeat);
-        }
-
-        private bool ShouldIncludeDiscoveredHeartbeat(UnityMcpHeartbeat heartbeat)
-        {
-            if (heartbeat == null)
-            {
-                return false;
-            }
-
-            if (!string.Equals(UnityMcpLanDiscoveryService.NormalizeGroup(heartbeat.name_group), UnityMcpLanDiscoveryService.NormalizeGroup(discoveryGroup), StringComparison.Ordinal))
-            {
-                return false;
-            }
-
-            if (string.Equals(heartbeat.source, "manual", StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-
-            if (string.IsNullOrEmpty(heartbeat.lastUpdatedUtc))
-            {
-                return true;
-            }
-
-            if (!DateTime.TryParse(heartbeat.lastUpdatedUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out var parsed))
-            {
-                return true;
-            }
-
-            return DateTime.UtcNow - parsed.ToUniversalTime() <= UnityMcpConstants.CommandResultRetention;
         }
 
         private UnityMcpCapabilities BuildCapabilities()
@@ -1064,16 +898,6 @@ namespace PuertsUnityMcp
             public string base64;
             public string note;
             public string error;
-        }
-
-        [Serializable]
-        private sealed class DiscoveryScanResult
-        {
-            public bool enabled;
-            public string endpointKind;
-            public string name;
-            public string name_group;
-            public int port;
         }
     }
 }

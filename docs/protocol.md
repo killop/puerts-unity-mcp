@@ -77,19 +77,20 @@ Current implementation constraint: all C# JSON serialization uses Unity `JsonUti
 - `tools/list`: each descriptor has `inputSchemaJson`
 - `tools/call`: result has `structuredContentJson`
 
-## Runtime Discovery
+## Explicit Remote Targeting
 
-LAN discovery uses UDP broadcast on port `18992` with a shared `name_group`.
-UDP broadcast/multicast is best effort: enterprise firewalls, AP isolation,
-routed VLANs, VPN policy, or network administrator rules may block it even when
-TCP between the PC and phone is allowed. The Editor endpoint and stdio proxy can
-also probe configured `lanHttpProbeHosts` and `lanHttpProbeCidrs` over HTTP
-`GET /health`, so direct phone discovery does not depend on UDP only.
+Remote Editor and phone/player MCP endpoints are never auto-discovered. There is
+no UDP broadcast/multicast, no HTTP subnet scan, and no `name_group` filtering in
+the protocol. A PC agent connects to remote Unity by an explicit URL:
 
-Discovered endpoints are stored in memory first. The Editor endpoint keeps the
-existing project-local heartbeat cache for UI and agent convenience. Runtime
-endpoints default to no discovered-endpoint disk cache, so phones do not create
-`.puerts-unity-mcp/players/*` directories during normal discovery.
+- pass `--target-url http://PHONE_OR_PC_IP:PORT` to the stdio proxy
+- set `PUERTS_UNITY_MCP_TARGET_URL`
+- set `selectedTargetUrl` in `puerts-unity-mcp-extension/editor-mcp-config.json`
+- pass `httpUrl` directly to remote-capable tools such as `runtime.js.eval`
+
+The project-local heartbeat cache under `.puerts-unity-mcp` remains for the
+local Editor endpoint and optional local Runtime file-command flows, not for LAN
+discovery.
 
 ## File Command Pump
 
@@ -176,9 +177,8 @@ Editor JS and Runtime JS are separate PuerTS `ScriptEnv` instances. The Editor e
 
 ## Direct Remote Player Routing
 
-A remote phone Player can be discovered by LAN discovery, selected by target id,
-or called directly with an HTTP URL. The package does not create persistent
-manual Player registrations from MCP calls.
+A remote phone Player is called directly with an HTTP URL. The package does not
+create persistent manual Player registrations from MCP calls.
 
 ```json
 {
@@ -191,7 +191,8 @@ manual Player registrations from MCP calls.
 }
 ```
 
-When a Player appears in `runtime.targets.list`, route by `targetId`:
+If `selectedTargetUrl` is set to a Player URL, `runtime.targets.list` exposes a
+configured direct target and calls can route by `targetId`:
 
 ```json
 {

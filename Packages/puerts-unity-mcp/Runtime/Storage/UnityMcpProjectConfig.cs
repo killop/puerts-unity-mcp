@@ -6,12 +6,12 @@ namespace PuertsUnityMcp
     [Serializable]
     public sealed class UnityMcpProjectConfig
     {
-        public const int LatestVersion = 4;
+        public const int LatestVersion = 5;
 
         public int version = LatestVersion;
-        public string _comment_editorBindAddress = "Use 127.0.0.1 for local-only access. Use 0.0.0.0 when other computers need to connect to this Editor MCP. If discovery shows this Editor but remote machines cannot connect, editorBindAddress is probably still bound to 127.0.0.1.";
-        public string _comment_runtimeBindAddress = "Use 0.0.0.0 for APK/IPA/standalone LAN direct so a PC agent can connect to the embedded Player MCP. 127.0.0.1 makes the Player MCP local-only inside the device.";
-        public string _comment_lanDiscovery = "LAN discovery only accepts endpoints with the same name_group. PC agents can connect directly to discovered APK/IPA Player MCP endpoints without opening the Unity Editor. UDP broadcast/multicast may be blocked by firewalls, AP isolation, VLAN routing, or network administrator policy, and usually only works inside one subnet. Use lanHttpProbeHosts or lanHttpProbeCidrs such as 192.168.1.0/24 as the TCP/HTTP fallback.";
+        public string _comment_editorBindAddress = "Use 127.0.0.1 for local-only access. Use 0.0.0.0 when other computers need to connect to this Editor MCP by explicit URL.";
+        public string _comment_runtimeBindAddress = "Use 0.0.0.0 for APK/IPA/standalone LAN direct so a PC agent can connect to the embedded Player MCP by explicit URL. 127.0.0.1 makes the Player MCP local-only inside the device.";
+        public string _comment_directTargets = "No LAN discovery is performed. Set selectedTargetUrl, pass --target-url, or set PUERTS_UNITY_MCP_TARGET_URL when connecting to a remote Unity Editor or phone/player MCP.";
         public bool editorAutoStart = true;
         public string editorBindAddress = "127.0.0.1";
         public int editorPort = UnityMcpConstants.DefaultEditorPort;
@@ -19,12 +19,7 @@ namespace PuertsUnityMcp
         public string runtimeBindAddress = "0.0.0.0";
         public int runtimePort = UnityMcpConstants.DefaultPlayerPort;
         public int runtimeLogBufferSize = 500;
-        public bool lanDiscoveryEnabled = true;
-        public string[] lanHttpProbeHosts = new string[0];
-        public string[] lanHttpProbeCidrs = new string[0];
-        public int lanHttpProbeTimeoutMs = 1000;
         public string name = "";
-        public string name_group = "default";
         public string selectedTargetKind = "editor";
         public string selectedTargetId = "";
         public string selectedTargetName = "";
@@ -39,25 +34,15 @@ namespace PuertsUnityMcp
         public void Normalize()
         {
             version = LatestVersion;
-            _comment_editorBindAddress = string.IsNullOrEmpty(_comment_editorBindAddress)
-                ? "Use 127.0.0.1 for local-only access. Use 0.0.0.0 when other computers need to connect to this Editor MCP. If discovery shows this Editor but remote machines cannot connect, editorBindAddress is probably still bound to 127.0.0.1."
-                : _comment_editorBindAddress;
-            _comment_lanDiscovery = string.IsNullOrEmpty(_comment_lanDiscovery)
-                ? "LAN discovery only accepts endpoints with the same name_group. PC agents can connect directly to discovered APK/IPA Player MCP endpoints without opening the Unity Editor. UDP broadcast/multicast may be blocked by firewalls, AP isolation, VLAN routing, or network administrator policy, and usually only works inside one subnet. Use lanHttpProbeHosts or lanHttpProbeCidrs such as 192.168.1.0/24 as the TCP/HTTP fallback."
-                : _comment_lanDiscovery;
-            _comment_runtimeBindAddress = string.IsNullOrEmpty(_comment_runtimeBindAddress)
-                ? "Use 0.0.0.0 for APK/IPA/standalone LAN direct so a PC agent can connect to the embedded Player MCP. 127.0.0.1 makes the Player MCP local-only inside the device."
-                : _comment_runtimeBindAddress;
+            _comment_editorBindAddress = "Use 127.0.0.1 for local-only access. Use 0.0.0.0 when other computers need to connect to this Editor MCP by explicit URL.";
+            _comment_runtimeBindAddress = "Use 0.0.0.0 for APK/IPA/standalone LAN direct so a PC agent can connect to the embedded Player MCP by explicit URL. 127.0.0.1 makes the Player MCP local-only inside the device.";
+            _comment_directTargets = "No LAN discovery is performed. Set selectedTargetUrl, pass --target-url, or set PUERTS_UNITY_MCP_TARGET_URL when connecting to a remote Unity Editor or phone/player MCP.";
             editorBindAddress = string.IsNullOrEmpty(editorBindAddress) ? "127.0.0.1" : editorBindAddress;
             runtimeBindAddress = string.IsNullOrEmpty(runtimeBindAddress) ? "0.0.0.0" : runtimeBindAddress;
             editorPort = editorPort <= 0 ? UnityMcpConstants.DefaultEditorPort : editorPort;
             runtimePort = runtimePort <= 0 ? UnityMcpConstants.DefaultPlayerPort : runtimePort;
             runtimeLogBufferSize = runtimeLogBufferSize <= 0 ? 500 : runtimeLogBufferSize;
-            lanHttpProbeHosts = lanHttpProbeHosts ?? new string[0];
-            lanHttpProbeCidrs = lanHttpProbeCidrs ?? new string[0];
-            lanHttpProbeTimeoutMs = lanHttpProbeTimeoutMs <= 0 ? 1000 : Math.Min(lanHttpProbeTimeoutMs, 10000);
             name = name ?? string.Empty;
-            name_group = string.IsNullOrEmpty(name_group) ? "default" : name_group.Trim();
             selectedTargetKind = string.IsNullOrEmpty(selectedTargetKind) ? "editor" : selectedTargetKind;
             selectedTargetId = selectedTargetId ?? string.Empty;
             selectedTargetName = selectedTargetName ?? string.Empty;
@@ -116,7 +101,16 @@ namespace PuertsUnityMcp
 
             config = config ?? UnityMcpProjectConfig.CreateDefault();
             config.Normalize();
-            AtomicFile.WriteJson(path, config, true);
+            try
+            {
+                AtomicFile.WriteJson(path, config, true);
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
 
         private static UnityMcpProjectConfig LoadFirstExisting(string[] paths)
